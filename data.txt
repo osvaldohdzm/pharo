@@ -1,1 +1,27 @@
-DISPLAY= /opt/google/chrome-remote-desktop/start-host --code="4/0Aci98E-JbplMCAEw5Ul4s8x6OC8jdE2124XSpbJaDhUDQey2e-07wMlJvfwTsCzhOX0Lgw" --redirect-url="https://remotedesktop.google.com/_/oauthredirect" --name=$(hostname)
+Este es un resumen de la reunión técnica sobre el microservicio **Self-Heal** (referido en la transcripción como "South Hill"), el cual forma parte de la suite **Wolf Hero**. La sesión se centró en la demostración del flujo de errores, la recuperación de mensajes y la preparación para una prueba de penetración (Pen Test).
+## 1. Propósito del Sistema (Self-Heal Microservice)
+El objetivo principal del microservicio es **localizar y verificar el estado de mensajes perdidos o fallidos**.
+ * **Escenario de uso:** Si la base de datos o la aplicación principal sufren una caída, los mensajes pueden perderse. Este servicio permite encontrar la ubicación y el estatus actual de dichos mensajes.
+ * **Funcionalidad clave:** Identifica fallos en los *callbacks* (callback failures) y permite realizar consultas basadas en rangos de tiempo (earliest/latest time) para recuperar logs de errores específicos.
+## 2. Demostración del Flujo de Error
+Durante la sesión, se realizó una prueba en el entorno de **UAT** siguiendo estos pasos:
+ 1. **Simulación:** Se redujo el escalado de un pod de "dummy callback" para forzar un fallo.
+ 2. **Ejecución:** Se envió un mensaje a través de **Insomnia** que resultó en una falla de callback.
+ 3. **Rastreo:** Se utilizó el microservicio Self-Heal para consultar el ID de correlación y los logs en **Splunk**.
+ 4. **Resultado:** El sistema generó un ID de búsqueda, consultó Splunk y devolvió el estatus del mensaje (ID de sistema, ID de solicitud y estado de publicación).
+## 3. Requerimientos Técnicos y Acceso
+Para proceder con las pruebas de seguridad, se identificaron las siguientes necesidades:
+ * **Colección de Insomnia:** El equipo de desarrollo compartirá la colección completa de APIs.
+ * **Gestión de Tokens:** * Los tokens se generan a través de una **Service Account** conectada a Splunk.
+   * Tienen una duración de expiración muy corta (**5 a 10 segundos**).
+   * Se incluirá la solicitud de generación de token dentro de la colección de Insomnia para que el equipo de pruebas pueda replicarla.
+ * **Configuración:** Se revisarán posibles necesidades de certificados TLS o configuraciones de canal específicas.
+## 4. Próximos Pasos y Acuerdos
+El proceso de **Penetration Testing** seguirá este flujo administrativo:
+| Paso | Acción | Responsable |
+|---|---|---|
+| **1. Envío de Prerrequisitos** | Enviar colección de Insomnia, URLs y método de generación de tokens vía email. | Equipo de Desarrollo |
+| **2. Gestión de Tickets** | Creación de la tarea en **ServiceNow (SNOW)** para revisión y aprobación. | Equipo de Seguridad |
+| **3. Comunicación** | **Importante:** Toda la comunicación técnica y respuestas deben ser por **Email**. No responder directamente en ServiceNow para evitar el cierre prematuro de tareas. | Ambos equipos |
+| **4. Ejecución y Reporte** | Realización del Pen Test, envío de hallazgos preliminares y reunión de cierre para el reporte final. | Equipo de Seguridad |
+¿Necesitas que profundice en algún punto técnico específico de la integración con Splunk o el proceso de ServiceNow?
