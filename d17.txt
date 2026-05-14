@@ -1,0 +1,153 @@
+Esta versión de la macro es la más avanzada y flexible. He corregido la lógica para que el **nombre del archivo de salida** y la **ruta de la plantilla** se generen dinámicamente usando los valores de las columnas de cada fila.
+Además, ahora extrae la ruta de la imagen directamente desde la **dirección del hipervínculo** (no el texto visible) para asegurar que se inserte la captura correcta.
+### Macro Mejorada: Generador de Documentos Dinámico
+```vba
+Sub GenerarDocumentos_Ciberseguridad_Pro()
+    Dim WordApp As Object, WordDoc As Object
+    Dim tbl As ListObject
+    Dim fila As ListRow
+    Dim fso As Object
+    Dim templatePath As String, savePath As String, fileNameFormat As String
+    Dim colIdx As Integer, i As Integer
+    Dim estadoActual As String
+    
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    
+    ' 1. Configuración de Tabla
+    On Error Resume Next
+    Set tbl = ActiveSheet.ListObjects(1)
+    On Error GoTo 0
+    
+    If tbl Is Nothing Then
+        MsgBox "No se encontró una tabla en la hoja activa.", vbCritical
+        Exit Sub
+    End If
+
+    ' 2. Iniciar Word (Referencia: Microsoft Word Object Library)
+    On Error Resume Next
+    Set WordApp = GetObject(, "Word.Application")
+    If WordApp Is Nothing Then Set WordApp = CreateObject("Word.Application")
+    On Error GoTo 0
+    WordApp.Visible = True
+
+    [span_3](start_span)[span_4](start_span)' 3. Procesar cada registro de la tabla[span_3](end_span)[span_4](end_span)
+    For Each fila In tbl.ListRows
+        [span_5](start_span)' Obtener el estado para decidir la plantilla[span_5](end_span)
+        estadoActual = Trim(fila.Range.Cells(1, tbl.ListColumns("Estado").Index).Value)
+        
+        ' --- CONFIGURACIÓN FLEXIBLE DE PLANTILLAS ---
+        [span_6](start_span)' Cambia estas rutas a las ubicaciones reales de tus documentos[span_6](end_span)
+        Select Case UCase(estadoActual)
+            Case "NEW"
+                templatePath = "C:\Templates\PLANTILLA_NEW.docx"
+            Case "OPEN"
+                templatePath = "C:\Templates\PLANTILLA_OPEN.docx"
+            Case "CLOSED"
+                templatePath = "C:\Templates\PLANTILLA_CLOSED.docx"
+            Case Else
+                templatePath = "" 
+        End Select
+
+        If templatePath <> "" And fso.FileExists(templatePath) Then
+            Set WordDoc = WordApp.Documents.Open(templatePath)
+            
+            ' --- REEMPLAZO DINÁMICO DE TEXTO ---
+            ' Busca en Word cualquier texto que coincida con «NombreColumna»
+            For colIdx = 1 To tbl.ListColumns.Count
+                Dim colName As String, cellVal As String
+                colName = tbl.HeaderRowRange.Cells(1, colIdx).Value
+                cellVal = fila.Range.Cells(1, colIdx).Value
+                
+                [span_7](start_span)[span_8](start_span)' Reemplazar marcadores de texto estándar[span_7](end_span)[span_8](end_span)
+                ReemplazarEnWord WordDoc, "«" & colName & "»", cellVal
+            Next colIdx
+
+            [span_9](start_span)' --- INSERCIÓN DE IMÁGENES POR HIPERVÍNCULO[span_9](end_span) ---
+            For i = 1 To 6
+                Dim colImgName As String, marcadorImg As String
+                colImgName = "Evidencia " & i & " Imagen"
+                marcadorImg = "«IMG_" & i & "»"
+                
+                On Error Resume Next
+                colIdx = tbl.ListColumns(colImgName).Index
+                On Error GoTo 0
+                
+                If colIdx > 0 Then
+                    Dim celdaImg As Range
+                    Set celdaImg = fila.Range.Cells(1, colIdx)
+                    
+                    [span_10](start_span)' Obtiene la ruta del Hipervínculo (Address)[span_10](end_span)
+                    If celdaImg.Hyperlinks.Count > 0 Then
+                        Dim fullImgPath As String
+                        fullImgPath = celdaImg.Hyperlinks(1).Address
+                        
+                        ' Si el link es relativo (Capturas\...), lo vuelve absoluto
+                        If Not fso.FileExists(fullImgPath) Then
+                            fullImgPath = ThisWorkbook.Path & "\" & fullImgPath
+                        End If
+                        
+                        InsertarImagenWord WordDoc, marcadorImg, fullImgPath
+                    Else
+                        ' Si no hay link, elimina el marcador
+                        ReemplazarEnWord WordDoc, marcadorImg, ""
+                    End If
+                End If
+            Next i
+
+            [span_11](start_span)' --- NOMBRE DE ARCHIVO DINÁMICO[span_11](end_span) ---
+            ' Se construye usando ID de Servicio, Hallazgo y Severidad
+            Dim idServ As String, hallazgo As String, sev As String
+            idServ = fila.Range.Cells(1, tbl.ListColumns("Id de Servicio").Index).Value
+            hallazgo = fila.Range.Cells(1, tbl.ListColumns("Hallazgo").Index).Value
+            sev = fila.Range.Cells(1, tbl.ListColumns("Severidad").Index).Value
+            
+            ' Formato: DEFECT 01 CYBERSECURITY - [HALLAZGO] - ISSUE [ID] - [SEVERIDAD].docx
+            fileNameFormat = "DEFECT 01 CYBERSECURITY - " & hallazgo & " - ISSUE XXXX - " & sev & ".docx"
+            
+            ' Limpiar caracteres prohibidos en nombres de archivos
+            fileNameFormat = CleanFileName(fileNameFormat)
+            savePath = ThisWorkbook.Path & "\" & fileNameFormat
+            
+            WordDoc.SaveAs2 savePath
+            WordDoc.Close
+        End If
+    Next fila
+
+    MsgBox "Generación finalizada. Documentos creados en la carpeta del Excel.", vbInformation
+End Sub
+
+' Funciones Auxiliares
+Sub ReemplazarEnWord(doc As Object, target As String, replacement As String)
+    With doc.Content.Find
+        .Text = target
+        .Replacement.Text = IIf(replacement = "", " ", replacement)
+        .Execute Replace:=2 ' wdReplaceAll
+    End With
+End Sub
+
+Sub InsertarImagenWord(doc As Object, bookmark As String, path As String)
+    Dim rng As Object
+    Set rng = doc.Content
+    If rng.Find.Execute(FindText:=bookmark) Then
+        rng.Text = ""
+        On Error Resume Next
+        doc.InlineShapes.AddPicture FileName:=path, LinkToFile:=False, SaveWithDocument:=True, Range:=rng
+        On Error GoTo 0
+    End If
+End Sub
+
+Function CleanFileName(str As String) As String
+    Dim chars As Variant, i As Long
+    chars = Array("/", "\", ":", "*", "?", """", "<", ">", "|")
+    For i = LBound(chars) To UBound(chars)
+        str = Replace(str, chars(i), "_")
+    Next i
+    CleanFileName = str
+End Function
+
+```
+### Mejoras Clave Implementadas:
+ 1. **Plantillas Múltiples:** La macro evalúa la columna **Estado** y abre automáticamente la plantilla correspondiente para New, Open o Closed.
+ 2. **Rutas por Hipervínculo:** Ya no busca el texto de la celda ("Ver Imagen..."), sino que lee la propiedad .Hyperlinks(1).Address. Esto permite que, aunque el texto sea corto, la macro sepa exactamente dónde está el archivo en la carpeta Capturas%20de%20Pantalla\.
+ 3. **Nombre de Archivo Inteligente:** El nombre del archivo de salida se genera uniendo campos de la fila (Hallazgo, Severidad, etc.) y limpia automáticamente caracteres prohibidos (como / o :) para evitar errores al guardar.
+ 4. **Marcadores de Imagen:** En tus documentos de Word, coloca «IMG_1», «IMG_2», etc., donde quieras que aparezcan las capturas de pantalla.
