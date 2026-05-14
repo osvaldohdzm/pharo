@@ -1,0 +1,50 @@
+Como asistente experto en pentesting, analicemos este hallazgo. Primero, una nota importante: el hecho de que una cookie no tenga explícitamente el atributo SameSite no siempre significa que sea vulnerable a **CSRF** (Cross-Site Request Forgery), ya que los navegadores modernos (Chrome 80+, Edge, Firefox) ahora aplican un comportamiento por defecto de **SameSite=Lax** si el atributo está ausente.
+Aquí está el análisis técnico de tu hallazgo sobre la cookie JSESSIONID en el endpoint de autenticación:
+### **Clasificación:** **Vulnerabilidad Real (Potencial)** / **Mala práctica de configuración**.
+### **Nivel de Riesgo:** **Medio** (Si no existen tokens anti-CSRF adicionales o si se requiere compatibilidad con navegadores antiguos).
+### **Análisis Técnico:**
+En la petición que proporcionas, se observa el uso de JSESSIONID. Si el servidor no emite esta cookie con el atributo SameSite=Strict o Lax, y el atributo Secure, queda a merced de la interpretación del navegador.
+ 1. **Explotabilidad:** Para que esto sea un riesgo crítico (CSRF), el endpoint .../api/authenticate/authorize debería ser vulnerable a una petición forzada. Sin embargo, al ser una API que recibe un JSON (Content-Type: application/json), los ataques CSRF tradicionales (vía <form>) son más difíciles de ejecutar porque el navegador no permite enviar JSON en un form simple sin disparar un "preflight" de CORS.
+ 2. **Vector:** El riesgo real ocurre si un atacante logra que el navegador del usuario envíe la JSESSIONID en una petición no deseada que resulte en un cambio de estado o fuga de información.
+### **¿Es explotable?:**
+**Depende.** * **No** en navegadores modernos (Chrome/Edge actuales), ya que aplican Lax por defecto, lo que bloquea el envío de cookies en peticiones POST cross-site.
+ * **Sí** en navegadores antiguos o si el atacante logra realizar una navegación top-level (GET) que ejecute acciones sensibles.
+### **Pruebas de Concepto (PoC) Técnicas**
+Para demostrar que la cookie no tiene las restricciones adecuadas, no necesitas "atacar", sino **evidenciar el comportamiento del tráfico**.
+#### **Opción A: Verificación de Cabeceras (curl)**
+La mejor forma de demostrar que la configuración es débil desde el servidor es observar la respuesta del servidor al crear la sesión:
+```bash
+# El flag -i muestra las cabeceras de respuesta. Buscamos el Set-Cookie.
+curl -i -k -X POST 'https://assinaturadigital.uat.mx.hsbc/fepweb-signer-ui/api/authenticate/authorize' \
+-H 'Content-Type: application/json' \
+--data '{"username":"test"}' | grep -i "Set-Cookie"
+
+```
+**Resultado esperado para reportar:** Si en el Set-Cookie ves JSESSIONID=...; Path=/; HttpOnly pero **NO** ves SameSite=Lax o Strict, el hallazgo está confirmado.
+#### **Opción B: Demostración en Consola (Navegador)**
+Si quieres demostrar que la cookie es accesible o se envía en contextos donde no debería, puedes usar este script en la consola de una página **diferente** (ej. ejecutándolo en google.com apuntando al dominio de HSBC):
+```javascript
+// Intento de fetch cross-site para verificar si el navegador intenta adjuntar cookies
+fetch('https://assinaturadigital.uat.mx.hsbc/fepweb-signer-ui/api/authenticate/authorize', {
+    method: 'POST',
+    mode: 'no-cors', // Simula una petición opaca
+    credentials: 'include' // Obliga a intentar enviar cookies
+}).then(() => console.log("Petición enviada. Revisa la pestaña 'Network' para ver si JSESSIONID viajó."));
+
+```
+ * **Evidencia:** Si en la pestaña **Network**, la petición muestra el encabezado Cookie: JSESSIONID=..., has demostrado que el navegador permitió el envío en un contexto cross-site.
+### **Siguientes pasos recomendados:**
+ 1. **Revisar Tokens Anti-CSRF:** Verifica si en el body o en headers adicionales (como el X-Permited-Cross-Domain-Policies que aparece en tu log) existe algún mecanismo de validación de estado que impida el ataque aunque la cookie viaje.
+ 2. **Probar Bypass de SameSite:** Intenta cambiar el método de POST a GET (si el API lo permite) para ver si la cookie se envía bajo SameSite=Lax por defecto.
+### **Versión para Reporte (Redacción Profesional)**
+**Título:** Ausencia del atributo SameSite en cookies de sesión (JSESSIONID)
+**Descripción técnica:** Se identificó que la cookie de sesión JSESSIONID emitida por el endpoint /api/authenticate/authorize carece del atributo SameSite. Este atributo es una instrucción para el navegador que controla si las cookies se envían junto con las solicitudes iniciadas por sitios de terceros. Al no estar definido, se delega la seguridad al comportamiento por defecto del navegador, lo que podría permitir ataques de Cross-Site Request Forgery (CSRF) en entornos con navegadores heredados o configuraciones no restrictivas.
+**Impacto de negocio:** Un atacante podría inducir a un usuario autenticado a realizar acciones no deseadas en la plataforma (como autorizar firmas o modificar datos) sin su consentimiento, simplemente haciendo que la víctima visite un sitio web malicioso mientras su sesión está activa.
+**Escenario de ataque:** 1. El usuario inicia sesión legítimamente en el portal de firmas.
+2. El usuario visita un sitio controlado por el atacante en otra pestaña.
+3. El sitio malicioso ejecuta un script que hace un llamado al endpoint de HSBC.
+4. El navegador adjunta la JSESSIONID automáticamente debido a la falta de políticas SameSite=Strict.
+**Recomendación:** Configurar el servidor de aplicaciones para que todas las cookies de sesión incluyan los atributos:
+ * SameSite=Lax (como mínimo para permitir navegación fluida) o SameSite=Strict (recomendado para APIs sensibles).
+ * Secure (para asegurar que solo viajen por HTTPS).
+ * HttpOnly (para evitar acceso vía JavaScript/XSS).
