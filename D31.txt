@@ -1,0 +1,266 @@
+| Nombre del Issue | Descripción | Impacto | Recomendación |
+| --- | --- | --- | --- |
+| BUSINESS LOGIC FLAW (CMS) | Testing revealed that a Business Logic Flaw existed within the assessed application. Attacks on the business logic of an application can have significant impacts, furthermore, are difficult to identify as they are specific to the application being tested and require an understanding of that application - manual testing is typically required to highlight these. Business logic flaws may affect business rules, policies or workflows based on ordered tasks from one participant or stage to another. The Business Logic Flaw identified is that an unauthorized client (attacker) can be able to upload files / contracts of any extension for different users, after that it is possible to visualize the information without required any token (without authentication). 
+
+ | This can lead to a wide range of problems like information exposure. An attacker could upload and read sensitive data of the different clients requesting the URLs of the web application without an authentication token. 
+
+ | Modify the application's logic so that it maps (and enforces) business rules, policies and/or workflows throughout. For web applications, make sure that the access control mechanism is enforced correctly at the server side on every page. Users should not be able to access any unauthorized functionality or information by simply requesting direct access to that page. A review should be undertaken to determine which file types are expected to be received. Only these files should be allowed to be uploaded, any not on an explicitly accepted list must be blocked at source. 
+
+ |
+| UNRESTRICTED FILE UPLOAD (CMS) | It was found that the web application doesn’t validate properly the session identifiers prior to upload files, this could allow an attacker to interact with the application without supplying credentials (an access control token). 
+
+ | An attacker may be able to bypass critical parts of the application functionality and files can be uploaded which could contain malicious code. 
+
+ | Modify the application's logic so that it maps (and enforces) business rules, policies and/or workflows throughout. For web applications, make sure that the access control mechanism is enforced correctly at the server side on every page. Users should not be able to access any unauthorized functionality or information by simply requesting direct access to that page. 
+
+ |
+| UNRESTRICTED FILE DOWLOAD (CMS) | It was found that the web application doesn’t validate properly the session identifiers prior to process request to display client information, this could allow an attacker to interact with the application without supplying credentials (an access control token). 
+
+ | An attacker may be able to bypass critical parts of the application functionality (authorization or authentication bypass for example) and obtain client information. 
+
+ | For web applications, make sure that the access control mechanism is enforced correctly at the server side on every page. Users should not be able to access any unauthorized functionality or information by simply requesting direct access to that page. One way to do this is to ensure that all pages containing sensitive information are not cached, and that all such pages restrict access to requests that are accompanied by an active and authenticated session token associated with a user who has the required permissions to access that page. 
+
+ |
+| FILES OF ANY FORMAT CAN BE UPLOADED (CMS) | The application allows files to be uploaded without verification that the file type is as expected. 
+
+ | Some file types can be uploaded that run programmes which could contain malicious code. This could lead to a virus being introduced, or code that changes the way the application is intended to behave. 
+
+ | A review should be undertaken to determine which file types are expected to be received. Only these files should be allowed to be uploaded, any not on an explicitly accepted list must be blocked at source. 
+
+ |
+| BROKEN AUTHENTICATION (CMS) | It was found that the web application doesn’t validate properly the session identifiers prior to process requests, this allows an attacker to interact with the application without supplying credentials (an access control token). In other words, it is possible to bypass the authentication mechanism by directly calling an internal page that should only be available to a user once they have authenticated. 
+
+ | A malicious user could exploit this vulnerability to access sensitive information and/or application functionality without authenticating. 
+
+ | Validate properly the session identifiers (token) prior to process requests. It must be ensured that access controls are deployed uniformly throughout the application. Preventing unauthorized URL access requires selecting an approach for requiring proper authentication and proper authorization for each page of all module or options of the application. Frequently, such protection is provided by one or more components external to the application code. Regardless of the mechanism(s), it is recommended that: 1. The authentication and authorization policies be role based, to minimize the effort required to maintain these policies.  2. The policies should be highly configurable, in order to minimize any hard coded aspects of the policy.  3. The enforcement mechanism(s) should deny all access by default, requiring explicit grants to specific users and roles for access to every page.  4. If the page is involved in a workflow, check to make sure the conditions are in the proper state to allow access. 
+
+ |
+| PRIVILEGE ESCALATION (CMS) | Privilege escalation occurs when a user gets access to more resources or functionality than they are normally allowed, and such elevation or changes should have been prevented by the application. This is usually caused by a flaw in the application. Usually, people refer to vertical escalation when it is possible to access resources granted to more privileged accounts (e.g., acquiring administrative privileges for the application), and to horizontal escalation when it is possible to access resources granted to a similarly configured account (e.g., in an online banking application, accessing information related to a different user). 
+
+ | The result is that the application performs actions with more privileges than those intended by the developer or system administrator. 
+
+ | Application must ensure server-side validation and access controls to prevent client-side manipulation. Also, entitlements on server-side must ensure the client session is allowed to the object being requested or action being performed. User privileges and application features should be linked in RBAC models whenever possible to guarantee distinctive access profiles and easy customization. 
+
+ |
+| ABUSE OF OTP FUNCTIONALITY (CMS) | The application allows users to manipulate the recipient email address during the OTP (One-Time Password) delivery process. The application allows users to manipulate the recipient email address during the OTP (One-Time Password) delivery process. As a result, it enables an attacker to redirect the OTP to an arbitrary email address just changing the identification number of a user without authentication. 
+
+ | An attacker can redirect the OTP emails to other users of the web application and know emails of other clients. | * All client-side input should be validated before being processed by the application using data validation techniques. * The backend must strictly enforce OTP delivery only to the email address associated with the authenticated user or the account being verified. * Use an authorization mechanism to check if the logged-in user has access to perform the requested action.  * Validate user stories if a request requires a token, it should be validated for one operation and matched with user identifier each time that the user attempts to perform an operation.
+
+ |
+| TWO FACTOR AUTHENTICATION BYPASS (CMS) | An attacker with valid credentials (e.g. obtained through a phishing or brute force attack), can drop the verification OTP request through a proxy and log in successfully, completely bypassing the second factor authentication. 
+
+ | The bypass allows attackers with valid credentials (e.g. from phishing or credential stuffing) to gain full access to accounts without needing the second factor, defeating the purpose of 2FA entirely. 
+
+ | Implement strict server-side controls that enforce 2FA completion before granting access to sensitive areas or actions. Consider using separate token states (e.g. auth_status: “2fa_pending” vs. “authenticated”) and enforce checks on the backend. 
+
+ |
+| USER ENUMERATION OTP (CMS) | The system advises whether a customer’s email client exists or not. 
+
+ | Iterating possible numbers of users gives an attacker an increased probability of obtaining unauthorized access. It could also be used to send OTP emails. | Amend the message given the request OTP is sent. |
+| MULTIPLE SESSION ALLOWED (CMS) | Multiple simultaneous logons (sessions) are allowed using the same user ID. | If application allows concurrent logons of a single user and an attacker gains access to user credentials then that attacker can use the application simultaneously with a legitimate user, which will make auditing of malicious activity harder to track. 
+
+ | A best practice security measure is to ensure users are restricted to a single logon. Unless a valid business justification exists, multiple logons should not be allowed. It is the web application design decision to determine if multiple simultaneous logons from the same user are allowed from the same or from different client IP addresses. If the web application does not want to allow simultaneous session logons, it must take effective actions after each new authentication event, implicitly terminating the previously available session, or asking the user (through the old, new or both sessions) about the session that must remain active. 
+
+ |
+| ABUSE OF OTP FUNCTIONALITY (DOM) | The application allows users to manipulate the recipient email address during the OTP (One-Time Password) delivery process. As a result, it enables an attacker to redirect the OTP to an arbitrary email address just changing the identification number of a user without authentication. 
+
+ | An attacker can redirect the OTP emails to other users of the web application and know emails of other clients. 
+
+ | * All client-side input should be validated before being processed by the application using data validation techniques.  * The backend must strictly enforce OTP delivery only to the email address associated with the authenticated user or the account being verified.  * Use an authorization mechanism to check if the logged-in user has access to perform the requested action.  * Validate user stories if a request requires a token, it should be validated for one operation and matched with user identifier each time that the user attempts to perform an operation. 
+
+ |
+| TWO FACTOR AUTHENTICATION BYPASS (DOM) | An attacker with valid credentials (e.g., obtained through a phishing or brute force attack), can drop the verification OTP request through a proxy and log in successfully, completely bypassing the second factor authentication. 
+
+ | The bypass allows attackers with valid credentials (e.g. from phishing or credential stuffing) to gain full access to accounts without needing the second factor, defeating the purpose of 2FA entirely. 
+
+ | Implement strict server-side controls that enforce 2FA completion before granting access to sensitive areas or actions. Consider using separate token states (e.g., auth_status: “2fa_pending” vs. “authenticated”) and enforce checks on the backend. 
+
+ |
+| USER ENUMERATION OTP (DOM) | The system advises whether a customer’s email client exists or not. 
+
+ | Iterating numbers gives an attacker an increased probability of obtaining emails of users.  It could also be used to send OTP emails.
+
+ | Amend the message given the request OTP is sent. 
+
+ |
+| AUTHENTICATION BYPASS (API) | Assuming a user with a given identity, authorization is the process of determining whether that user can access a given resource, based on the user's privileges and any permissions or other access-control specifications that apply to the resource. This can lead to a wide range of problems, including information exposures, denial of service, and arbitrary code execution. The API endpoint responsible for user authentication improperly handles input validation for the password parameter. When submitting a space character, the API grants a valid session cookie as if correct credentials were provided. 
+
+ | Authentication bypass for any account with a known username. 
+
+ | All server-side input should be validated before being processed by the application using data validation techniques. 
+
+ |
+| UNRESTRICTED FILE UPLOAD (API) | The API allows files to be uploaded without validate the session identifiers, this could allow an attacker to interact with the application without supplying credentials (an access control token). 
+
+ | An attacker may be able to bypass critical parts of the application functionality and files can be uploaded which could contain malicious code. 
+
+ | Modify the application's logic so that it maps (and enforces) business rules, policies and/or workflows throughout. For APIs, make sure that the access control mechanism is enforced correctly at the server side on every endpoint. Users should not be able to access any unauthorized functionality or information without authentication/authorization. 
+
+ |
+| FILES ON ANY FORMAT CAN BE UPLOADED (API) | The API allows files to be uploaded without verification that the file type is as expected. 
+
+ | Some file types can be uploaded that run programs which could contain malicious code. This could lead to a virus being introduced, or code that changes the way the application is intended to behave. 
+
+ | A review should be undertaken to determine which file types are expected to be received. Only these files should be allowed to be uploaded, any not on an explicitly accepted list must be blocked at source.  The application must validate at least the bellow elements: • File type/ extension • Headers of the file • Content of the file
+
+ |
+| CONTENT-SECURITY-POLICY HEADER NOT SET (CMS) | Content-Security-Policy Header found Not Set by application. 
+
+ | Server response may be altered by man-in-the-middle attack. | Set Content-Security-Policy Header. 
+
+ |
+| IMPROPER CACHE CONTROL HEADER IS USED (CMS) | The settings used to secure cache control headers are incorrectly configured. 
+
+ | This can result in sensitive information being stored locally on the computer. An attacker can use the information stored in these to gain an insight into the workings of the application or to obtain sensitive information. 
+
+ | The mechanism must be configured correctly, as follows: Pragma: no-cache Cache-Control: no-store, no-cache, must-revalidate in whole application. 
+
+ |
+| MISCONFIGURED CORS POLICY HEADER (CMS) | The Cross-origin resource sharing (CORS) header is not properly set. The web application is configured to allow cross-origin requests from any origin (Access-Control-Allow-Origin: *), and permits potentially sensitive HTTP methods such as POST, PUT and DELETE through the CROS preflight response (Access-Control-Allow-Methods) and could allow expose sensitive information such as authentication tokens returned in response headers. 
+
+ | This configuration may expose the application to Cross-Origin attacks, such as unauthorized API interactions from malicious websites. Attackers may perform unauthorized state-changing actions and / or steal user tokens. 
+
+ | For all web application requests (in a globally way) set the Access-Control-Allow-Origin properly to only accept request from the authorized domains. Avoid using Access-Control-Allow-Origin: * Remove or strictly control the use of Access-Control-Expose-Headers. 
+
+ |
+| PLATFORM INFORMATION DISCLOSURE (CMS) | Unnecessary information including functional system information (that are not intended for users to view) is included within files that are held on the end user machine. The web application exposes platform and technology details through HTTP response headers when certain requests are made – particularly for unauthenticated requests or when the user provokes any error. 
+
+ | Information such as system information may be used by an attacker to launch an attack to gain further insight or access into the application. 
+
+ | Suppress unnecessary response headers that disclose technology information. Remove all superfluous information from client-side files. Specifically, the following must be removed: Code or descriptions of code in comments.  Explanations of either client- or server-side application logic. Application change history. System information such as version numbers; internal system names; application logic; and names, contact information, or other personnel details. 
+
+ |
+| USER ENUMERATION (DOM-Forgot Password) | The system advises whether a username or password is incorrect. This gives an attacker the ability to determine whether a username is valid or not. 
+
+ | Populating a list of valid usernames gives an attacker an increased probability of obtaining unauthorized access. It could also be used to launch an attack that locks out all users (known as a Denial-of-Service attack). 
+
+ | Amend the message given to the user when the “Forgot Password” is being used. This should not advise which of the users are valid. 
+
+ |
+| PLATFORM INFORMATION DISCLOSURE (DOM) | Unnecessary information including functional system information (that are not intended for users to view) is included within files that are held on the end user machine. The web application exposes platform and technology details through HTTP response headers when certain requests are made – particularly for unauthenticated requests or when the user provokes any error. 
+
+ | Information such as system information may be used by an attacker to launch an attack to gain further insight or access into the application. 
+
+ | Suppress unnecessary response headers that disclose technology information. Remove all superfluous information from client-side files. Specifically, the following must be removed: Code or descriptions of code in comments.  Explanations of either client- or server-side application logic. Application change history. System information such as version numbers; internal system names; application logic; and names, contact information or other personnel details. 
+
+ |
+| DISCLOSURE OF EMAIL (DOM) | The web application may expose more data than what the client legitimately needs, such as email users, relying only on the client to do the filtering. 
+
+ | Restricted data could be viewed, copied, or recorded by a malicious user and used to build information used to launch an attack. 
+
+ | Undertake a review of the data fields that can be displayed and which of those really need to be viewed in full. Ensure any data that is business sensitive and not required in full, is masked – for example: an account number would appear *****678.  Never rely on the client to filter data. Show information that should only be necessary. 
+
+ |
+| CONTENT-SECURITY-POLICY HEADER NOT SET (DOM) | Content-Security-Policy Header found Not Set by application. 
+
+ | Server response may be altered by man-in-the-middle attack. | Set Content-Security-Policy Header. 
+
+ |
+| IMPROPER CACHE CONTROL HEADER IS USED (DOM) | The settings used to secure cache control headers are incorrectly configured. 
+
+ | This can result in sensitive information being stored locally on the computer. An attacker can use the information stored in these to gain an insight into the workings of the application or to obtain sensitive information. 
+
+ | The mechanism must be configured correctly, as follows: Pragma: no-cache Cache-Control: no-store, no-cache, must-revalidate |
+| MISCONFIGURED CORS POLICY HEADER (DOM) | The Cross-origin resource sharing (CORS) header is not properly set. The web application is configured to allow cross-origin requests from any origin (Access-Control-Allow-Origin: *), and permits potentially sensitive HTTP methods such as POST, PUT and DELETE through the CROS preflight response (Access-Control-Allow-Methods) and could allow expose sensitive information such as authentication tokens returned in response headers. 
+
+ | This configuration may expose the application to Cross-Origin attacks, such as unauthorized API interactions from malicious websites. Attackers may perform unauthorized state-changing actions and / or steal user tokens. 
+
+ | For all web application requests (in a globally way) set the Access-Control-Allow-Origin properly to only accept request from the authorized domains. Avoid using Access-Control-Allow-Origin: * Remove or strictly control the use of Access-Control-Expose-Headers. 
+
+ |
+| USER ENUMERATION (CORE) | The system advises whether a username or password is incorrect. This gives an attacker the ability to determine whether a username is valid or not. 
+
+ | Populating a list of valid usernames gives an attacker an increased probability of obtaining unauthorised access. It could also be used to launch an attack that locks out all users (known as a Denial-of-Service attack). 
+
+ | Amend the message given to the user when their authentication credentials are incorrect. This should not advise which of the credentials are incorrect. 
+
+ |
+| PLATFORM INFORMATION DISCLOSURE (CORE) | Unnecessary information including functional system information (that are not intended for users to view) is included within files that are held on the end user machine. The web application exposes platform and technology details through HTTP response headers when certain requests are made – particularly for unauthenticated requests or when the user provokes any error. 
+
+ | Information such as system information may be used by an attacker to launch an attack to gain further insight or access into the application. 
+
+ | Suppress unnecessary response headers that disclose technology information. Remove all superfluous information from client-side files. Specifically, the following must be removed: Code or descriptions of code in comments.  Explanations of either client- or server-side application logic. Application change history. System information such as version numbers; internal system names; application logic; and names, contact information, or other personnel details. 
+
+ |
+| MISCONFIGURED CORS POLICY HEADER (CORE) | The Cross-origin resource sharing (CORS) header is not properly set. The web application is configured to allow cross-origin requests from any origin (Access-Control-Allow-Origin: *), and permits potentially sensitive HTTP methods such as POST, PUT and DELETE through the CROS preflight response (Access-Control-Allow-Methods) and could allow expose sensitive information such as authentication tokens returned in response headers. 
+
+ | This configuration may expose the application to Cross-Origin attacks, such as unauthorized API interactions from malicious websites. Attackers may perform unauthorized state-changing actions and / or steal user tokens. 
+
+ | For all web application requests (in a globally way) set the Access-Control-Allow-Origin properly to only accept request from the authorized domains. Avoid using Access-Control-Allow-Origin: * Remove or strictly control the use of Access-Control-Expose-Headers. 
+
+ |
+| IMPROPER CACHE CONTROL HEADER IS USED (CORE) | The settings used to secure cache control headers are incorrectly configured. 
+
+ | This can result in sensitive information being stored locally on the computer. An attacker can use the information stored in these to gain an insight into the workings of the application or to obtain sensitive information. 
+
+ | The mechanism must be configured correctly, as follows: Pragma: no-cache Cache-Control: no-store, no-cache, must-revalidate in whole application. 
+
+ |
+| OPEN SOURCE WITH KNOWN VULNERABILITY (CORE) | It was identified that the web server uses a vulnerable JavaScript library jquery version 3.1.1.  jquery version 3.1.1
+
+ | The software is affected for reported vulnerabilities, an attacker can research about the vulnerabilities that affect the specific software version and try to exploit. While some vulnerabilities lead to only minor impact some of the largest breaches have relied on exploiting known vulnerabilities. 
+
+ | Install the security fix or update to the version release that solves this vulnerability. Evaluate to update to the latest released version of jQuery. 
+
+ |
+| CONTENT-SECURITY-POLICY HEADER NOT SET (CORE) | Content-Security-Policy Header found Not Set by application. 
+
+ | Server response may be altered by man-in-the-middle attack. 
+
+ | Set Content-Security-Policy Header |
+| USER ENUMERATION (API) | The API advises whether a user identification is correct. This gives an attacker the ability to determine whether a user is valid or not. 
+
+ | Populating a list of valid usernames gives an attacker an increased probability of obtaining unauthorised access. It could also be used to launch an attack that locks out all users (known as a Denial-of-Service attack). 
+
+ | Amend the message given to the user when their authentication credentials are incorrect. This should not advise which of the credentials are incorrect. 
+
+ |
+| LACK OF ERROR HANDLING (API) | It was found that user input is not handled/validated at server side which leads to exception/error.  Application leaks technical information upon exception.
+
+ | An attacker may force an error and get a useful insight to the underlying technology used (for example, the web server version is being used). This information could be used to formulate a targeted attack. 
+
+ | A good error handling mechanism always tries to capture all exceptions and returns a generic error message that does not reveal any details about the error and the application. Depending on the platform and container the application is running on, there can be different options. Set a generic custom error page for all unhandled exceptions at the container level.  (Normally, this is set in the configuration file.) The generic custom error page should have a simple error message that does not reveal any details about the exception happened.  Use a global error handler to capture all unhandled exceptions. Handle the error in the page level. 
+
+ |
+| MISCONFIGURED CORS POLICY HEADER (API) | The Cross-origin resource sharing (CORS) header is not properly set. The web application is configured to allow cross-origin requests from any origin (Access-Control-Allow-Origin: *), and permits potentially sensitive HTTP methods such as POST, PUT and DELETE through the CROS preflight response (Access-Control-Allow-Methods) and could allow expose sensitive information such as authentication tokens returned in response headers. 
+
+ | This configuration may expose the application to Cross-Origin attacks, such as unauthorized API interactions from malicious websites. Attackers may perform unauthorized state-changing actions and / or steal user tokens. 
+
+ | Set the Access-Control-Allow-Origin properly to only accept request from the authorized domains. 
+
+ |
+| CONTENT SECURITY POLICY NOT ENFORCED (API) | Testing revealed that the API did not enforce a Content Security Policy. Content Security Policy (CSP) is a web security model, which makes use of an HTTP header to allow applications to define approved content sources that the browser should load for that application. This can be used to reduce the risk of content injection vulnerabilities such as Cross Site Scripting (XSS). It was identified that the header Content-Security-Policy is missing in the response of APIs. 
+
+ | This could potentially allow an attacker to insert malicious executable content into the application’s responses. 
+
+ | Header used to specify whether a response can be framed in a , ,  or  element. For an API response, there is no requirement to be framed in any of those elements.  Providing frame-ancestors 'none' prevents any domain from framing the response returned by the API call. This header protects against drag-and-drop style clickjacking attacks. 
+
+ |
+| IMPROPER CACHE CONTROL HEADER IS USED (API) | The settings used to secure cache control headers are incorrectly configured. 
+
+ | This can result in sensitive information being stored locally on the computer. An attacker can use the information stored in these to gain an insight into the workings of the application or to obtain sensitive information. 
+
+ | The mechanism must be configured correctly, as follows: Pragma: no-cache, Cache-Control: no-store, no-cache must-revalidate. 
+
+ |
+| PLATFORM INFORMATION DISCLOSURE (API) | The APIs exposes platform and technology details through HTTP response headers when certain requests are made, particularly for unauthenticated requests or when the user provokes any error. 
+
+ | Information such as system information may be used by an attacker to launch an attack to gain further insight or access into the application. 
+
+ | Suppress unnecessary response headers that disclose technology information. Remove all superfluous information from client-side files. Specifically, the following must be removed: Code or descriptions of code in comments.  Explanations of either client- or server-side application logic. Application change history. System information such as version numbers; internal system names; application logic; and names, contact information, or other personnel details. 
+
+ |
+| SERVICE WITH KNOWN VULNERABILITY (INFRA-OpenSSH 5.3) | According to the version of the service SSH identified on the banner: OpenSSH 5.3 (Port 22).  This version has known vulnerabilities.
+
+ | If a service is found to contain security vulnerabilities could introduce potential weakness that can lead to compromise of the server. 
+
+ | * If possible, upgrade to the latest version (OpenSSH: Release Notes) * Verify that all services are up to date.  * Continuously monitor sites like Common Vulnerability and Exposures (CVE) and National Vulnerability Database (NVD) for component vulnerabilities. 
+
+ |
+| PLATFORM INFORMATION DISCLOSURE (robots.txt) | The web server contains a robots.txt file, however the file is empty. The file robots.txt is used to give instructions to web robots, such as search engine crawlers, about locations within the web site that robots are allowed, or not allowed, to crawl and index. 
+
+ | The presence of the robots.txt does not in itself present any kind of security vulnerability. However, it is often used to identify restricted or private areas of a site's contents. The information in the file may therefore help an attacker to map out the site's contents, especially if some of the locations identified are not linked from elsewhere in the site. If the application relies on robots.txt to protect access to these areas, and does not enforce proper access control over them, then this presents a serious vulnerability. 
+
+ | The robots.txt file is not itself a security threat, and its correct use can represent good practice for non-security reasons. You should not assume that all web robots will honor the file's instructions. Rather, assume that attackers will pay close attention to any locations identified in the file. Do not rely on robots.txt to provide any kind of protection over unauthorized access. 
+
+ |
