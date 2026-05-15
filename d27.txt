@@ -1,0 +1,265 @@
+Sub CYB001_GenerarDocumentos_HSBC()
+
+    Dim WordApp As Object
+    Dim WordDoc As Object
+    Dim tbl As ListObject
+    Dim fila As ListRow
+    Dim fso As Object
+    
+    Dim templatePath As String
+    Dim savePath As String
+    Dim fileNameFormat As String
+    
+    Dim colIdx As Long
+    Dim i As Long
+    
+    Dim estadoActual As String
+    Dim hallazgo As String
+    Dim sev As String
+    Dim refID As String
+    Dim nroDefecto As String
+    
+    Dim cntNew As Long
+    Dim cntOpen As Long
+    Dim cntClosed As Long
+
+    cntNew = 0
+    cntOpen = 0
+    cntClosed = 0
+
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    On Error Resume Next
+    Set tbl = ActiveSheet.ListObjects(1)
+    On Error GoTo 0
+
+    If tbl Is Nothing Then
+        MsgBox "No se encontró una tabla en la hoja activa.", vbCritical
+        Exit Sub
+    End If
+
+    On Error Resume Next
+    Set WordApp = GetObject(, "Word.Application")
+
+    If WordApp Is Nothing Then
+        Set WordApp = CreateObject("Word.Application")
+    End If
+    On Error GoTo 0
+
+    WordApp.Visible = True
+
+    For Each fila In tbl.ListRows
+
+        estadoActual = Trim$(CStr(fila.Range.Cells(1, tbl.ListColumns("Estado").Index).Value))
+        hallazgo = CStr(fila.Range.Cells(1, tbl.ListColumns("Hallazgo").Index).Value)
+        sev = CStr(fila.Range.Cells(1, tbl.ListColumns("Severidad").Index).Value)
+        refID = CStr(fila.Range.Cells(1, tbl.ListColumns("Referencia").Index).Value)
+
+        templatePath = vbNullString
+        savePath = vbNullString
+        fileNameFormat = vbNullString
+
+        Select Case UCase$(estadoActual)
+
+            Case "NEW"
+
+                cntNew = cntNew + 1
+                nroDefecto = Format$(cntNew, "00")
+
+                templatePath = "C:\Users\45481604\Desktop\WorkSpace\Templates\DEFECT 0X CYBERSECURITY - PT - XXX - ISSUE ID XXX- XXX.docx"
+
+                fileNameFormat = _
+                    "DEFECT " & nroDefecto & _
+                    " CYBERSECURITY - PT - " & _
+                    hallazgo & _
+                    " - ISSUE ID " & _
+                    refID & _
+                    " - " & _
+                    UCase$(sev) & ".docx"
+
+                savePath = ThisWorkbook.Path & "\Evidences\Defeacts\" & fileNameFormat
+
+            Case "OPEN"
+
+                cntOpen = cntOpen + 1
+
+                templatePath = "C:\Users\45481604\Desktop\WorkSpace\Templates\ISSUE ID XX- XXX - XXXX - OPEN.docx"
+
+                fileNameFormat = _
+                    "ISSUE ID " & _
+                    refID & _
+                    " - " & _
+                    hallazgo & _
+                    " - " & _
+                    UCase$(sev) & _
+                    " - OPEN.docx"
+
+                savePath = ThisWorkbook.Path & "\Evidences\Retest\" & fileNameFormat
+
+            Case "CLOSED"
+
+                cntClosed = cntClosed + 1
+
+                templatePath = "C:\Users\45481604\Desktop\WorkSpace\Templates\ISSUE ID XX- XXX - XXXX - CLOSED.docx"
+
+                fileNameFormat = _
+                    "ISSUE ID " & _
+                    refID & _
+                    " - " & _
+                    hallazgo & _
+                    " - " & _
+                    UCase$(sev) & _
+                    " - CLOSED.docx"
+
+                savePath = ThisWorkbook.Path & "\Evidences\Retest\" & fileNameFormat
+
+            Case Else
+                GoTo SiguienteFila
+
+        End Select
+
+        If templatePath <> vbNullString And fso.FileExists(templatePath) Then
+
+            Set WordDoc = WordApp.Documents.Open(templatePath)
+
+            AplicarColorSeveridad WordDoc, sev
+
+            For colIdx = 1 To tbl.ListColumns.Count
+
+                Dim colName As String
+                Dim cellVal As String
+
+                colName = CStr(tbl.HeaderRowRange.Cells(1, colIdx).Value)
+                cellVal = Trim$(CStr(fila.Range.Cells(1, colIdx).Value))
+
+                If cellVal = vbNullString Then
+                    BorrarParrafoSiExiste WordDoc, "«" & colName & "»"
+                Else
+                    WordAppReemplazarParrafo _
+                        WordApp, _
+                        WordDoc, _
+                        "«" & colName & "»", _
+                        cellVal
+                End If
+
+            Next colIdx
+
+            For i = 1 To 6
+
+                Dim colImgName As String
+                Dim marcadorImg As String
+                Dim celdaImg As Range
+                Dim rawPath As String
+                Dim fullImgPath As String
+
+                colImgName = "Evidencia " & i & " Imagen"
+                marcadorImg = "[Evidencia " & i & " Imagen]"
+
+                colIdx = GetColumnIndex(tbl, colImgName)
+
+                If colIdx = 0 Then
+
+                    BorrarParrafoSiExiste WordDoc, marcadorImg
+
+                Else
+
+                    Set celdaImg = fila.Range.Cells(1, colIdx)
+
+                    If celdaImg.Hyperlinks.Count = 0 Then
+
+                        BorrarParrafoSiExiste WordDoc, marcadorImg
+
+                    Else
+
+                        rawPath = Replace( _
+                            CStr(celdaImg.Hyperlinks(1).Address), _
+                            "%20", _
+                            " " _
+                        )
+
+                        If IsRelativePath(rawPath) Then
+                            fullImgPath = ThisWorkbook.Path & "\" & rawPath
+                        Else
+                            fullImgPath = rawPath
+                        End If
+
+                        If fso.FileExists(fullImgPath) Then
+                            InsertarImagenWord WordDoc, marcadorImg, fullImgPath
+                        Else
+                            BorrarParrafoSiExiste WordDoc, marcadorImg
+                        End If
+
+                    End If
+
+                End If
+
+            Next i
+
+            fileNameFormat = CleanFileName(fileNameFormat)
+
+            WordDoc.SaveAs2 savePath
+            WordDoc.Close False
+
+        End If
+
+SiguienteFila:
+
+    Next fila
+
+    WordApp.Quit
+
+    Set WordApp = Nothing
+
+    MsgBox _
+        "Proceso Terminado." & vbCrLf & _
+        "Archivos generados: " & _
+        (cntNew + cntOpen + cntClosed), _
+        vbInformation
+
+End Sub
+
+
+Private Sub AplicarColorSeveridad(ByVal doc As Object, ByVal sev As String)
+
+    On Error Resume Next
+
+    Dim celda As Object
+
+    Set celda = doc.Tables(1).Cell(1, 2)
+
+    If Not celda Is Nothing Then
+
+        Select Case UCase(Trim(sev))
+
+            Case "LOW"
+
+                celda.Shading.BackgroundPatternColor = RGB(0, 176, 240)
+                celda.Range.Font.ColorIndex = 1
+
+            Case "MEDIUM"
+
+                celda.Shading.BackgroundPatternColor = RGB(255, 255, 0)
+                celda.Range.Font.ColorIndex = 0
+
+            Case "HIGH"
+
+                celda.Shading.BackgroundPatternColor = RGB(255, 0, 0)
+                celda.Range.Font.ColorIndex = 1
+
+            Case "CRITICAL"
+
+                celda.Shading.BackgroundPatternColor = RGB(125, 51, 167)
+                celda.Range.Font.ColorIndex = 1
+
+            Case "INFORMATIONAL"
+
+                celda.Shading.BackgroundPatternColor = RGB(202, 228, 251)
+                celda.Range.Font.ColorIndex = 0
+
+        End Select
+
+    End If
+
+    On Error GoTo 0
+
+End Sub
