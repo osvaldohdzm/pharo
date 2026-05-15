@@ -1,0 +1,164 @@
+Entendido, mantendré la estructura original y las funciones de reemplazo que ya utilizas (WordAppReemplazarParrafo y BorrarParrafoSiExiste), asumiendo que funcionan correctamente en tu entorno.
+He integrado únicamente la lógica de **coloreado de la primera tabla** según la severidad y corregido el salto innecesario en el estado "OPEN" para que la macro sea realmente funcional.
+### Macro Mejorada: CYB001_GenerarDocumentos_HSBC
+```vba
+Sub CYB001_GenerarDocumentos_HSBC()
+
+    Dim WordApp As Object, WordDoc As Object
+    Dim tbl As ListObject
+    Dim fila As ListRow
+    Dim fso As Object
+    Dim templatePath As String, savePath As String, fileNameFormat As String
+    Dim colIdx As Long, i As Long
+    Dim estadoActual As String
+    Dim cntNew As Long, cntOpen As Long, cntClosed As Long
+    Dim nroDefecto As String
+    
+    cntNew = 0: cntOpen = 0: cntClosed = 0
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    [span_4](start_span)' 1) Tabla[span_4](end_span)
+    On Error Resume Next
+    Set tbl = ActiveSheet.ListObjects(1)
+    On Error GoTo 0
+    If tbl Is Nothing Then
+        [span_5](start_span)MsgBox "No se encontró una tabla en la hoja activa.", vbCritical[span_5](end_span)
+        Exit Sub
+    End If
+    
+    ' 2) Word
+    On Error Resume Next
+    Set WordApp = GetObject(, "Word.Application")
+    If WordApp Is Nothing Then Set WordApp = CreateObject("Word.Application")
+    On Error GoTo 0
+    WordApp.Visible = True
+    
+    ' 3) Loop filas
+    For Each fila In tbl.ListRows
+        estadoActual = Trim$(CStr(fila.Range.Cells(1, tbl.ListColumns("Estado").Index).value))
+        [span_6](start_span)Dim hallazgo As String: hallazgo = CStr(fila.Range.Cells(1, tbl.ListColumns("Hallazgo").Index).value)[span_6](end_span)
+        [span_7](start_span)Dim sev As String: sev = CStr(fila.Range.Cells(1, tbl.ListColumns("Severidad").Index).value)[span_7](end_span)
+        [span_8](start_span)Dim refID As String: refID = CStr(fila.Range.Cells(1, tbl.ListColumns("Referencia").Index).value)[span_8](end_span)
+
+        templatePath = vbNullString
+        savePath = vbNullString
+        fileNameFormat = vbNullString
+        
+        Select Case UCase$(estadoActual)
+            Case "NEW"
+                [span_9](start_span)cntNew = cntNew + 1[span_9](end_span)
+                nroDefecto = Format$(cntNew, "00")
+                templatePath = "C:\Users\45481604\Desktop\WorkSpace\Templates\DEFECT 0X CYBERSECURITY - PT - XXX - ISSUE ID XXX- XXX.docx"
+                [span_10](start_span)fileNameFormat = "DEFECT " & nroDefecto & " CYBERSECURITY  - PT - " & hallazgo & " - ISSUE ID " & refID & " - " & UCase$(sev) & ".docx"[span_10](end_span)
+                savePath = ThisWorkbook.path & "\Evidences\Defeacts\" & fileNameFormat
+            Case "OPEN"
+                [span_11](start_span)' Se eliminó el GoTo para permitir procesar estos archivos[span_11](end_span)
+                cntOpen = cntOpen + 1
+                templatePath = "C:\Users\45481604\Desktop\WorkSpace\Templates\ISSUE ID XX- XXX - XXXX - OPEN.docx"
+                [span_12](start_span)fileNameFormat = "ISSUE ID " & refID & "- " & hallazgo & " - " & UCase$(sev) & "- OPEN.docx"[span_12](end_span)
+                savePath = ThisWorkbook.path & "\Evidences\Retest\" & fileNameFormat
+            Case "CLOSED"
+                cntClosed = cntClosed + 1
+                [span_13](start_span)templatePath = "C:\Users\45481604\Desktop\WorkSpace\Templates\ISSUE ID XX- XXX - XXXX - CLOSED.docx"[span_13](end_span)
+                fileNameFormat = "ISSUE ID " & refID & "- " & hallazgo & " - " & UCase$(sev) & "- CLOSED.docx"
+                savePath = ThisWorkbook.path & "\Evidences\Retest\" & fileNameFormat
+            Case Else
+                [span_14](start_span)GoTo SiguienteFila[span_14](end_span)
+        End Select
+        
+        If templatePath <> vbNullString And fso.fileExists(templatePath) Then
+            Set WordDoc = WordApp.Documents.Open(templatePath)
+
+            [span_15](start_span)' --- NUEVA LÓGICA: Coloreo de Severidad en la primera tabla[span_15](end_span) ---
+            AplicarColorSeveridad WordDoc, sev
+
+            ' --- Reemplazo de texto (Usando tus funciones existentes) ---
+            For colIdx = 1 To tbl.ListColumns.Count
+                Dim colName As String, cellVal As String
+                colName = CStr(tbl.HeaderRowRange.Cells(1, colIdx).value)
+                cellVal = Trim$(CStr(fila.Range.Cells(1, colIdx).value))
+
+                If cellVal = vbNullString Then
+                    [span_16](start_span)BorrarParrafoSiExiste WordDoc, "«" & colName & "»"[span_16](end_span)
+                Else
+                    [span_17](start_span)' Se mantiene tu función original tal cual[span_17](end_span)
+                    WordAppReemplazarParrafo WordApp, WordDoc, "«" & colName & "»", cellVal
+                End If
+            Next colIdx
+
+            ' --- Imágenes ---
+            For i = 1 To 6
+                Dim colImgName As String, marcadorImg As String
+                [span_18](start_span)colImgName = "Evidencia " & i & " Imagen"[span_18](end_span)
+                marcadorImg = "[Evidencia " & i & " Imagen]"
+                
+                colIdx = GetColumnIndex(tbl, colImgName)
+                If colIdx = 0 Then
+                    [span_19](start_span)BorrarParrafoSiExiste WordDoc, marcadorImg[span_19](end_span)
+                Else
+                    Dim celdaImg As Range: Set celdaImg = fila.Range.Cells(1, colIdx)
+                    If celdaImg.Hyperlinks.Count = 0 Then
+                        [span_20](start_span)BorrarParrafoSiExiste WordDoc, marcadorImg[span_20](end_span)
+                    Else
+                        [span_21](start_span)Dim rawPath As String: rawPath = Replace(CStr(celdaImg.Hyperlinks(1).Address), "%20", " ")[span_21](end_span)
+                        Dim fullImgPath As String
+                        [span_22](start_span)If IsRelativePath(rawPath) Then[span_22](end_span)
+                            fullImgPath = ThisWorkbook.path & "\" & rawPath
+                        Else
+                            fullImgPath = rawPath
+                        End If
+                        
+                        If fso.fileExists(fullImgPath) Then
+                            [span_23](start_span)InsertarImagenWord WordDoc, marcadorImg, fullImgPath[span_23](end_span)
+                        Else
+                            [span_24](start_span)BorrarParrafoSiExiste WordDoc, marcadorImg[span_24](end_span)
+                        End If
+                    End If
+                End If
+            Next i
+
+            [span_25](start_span)fileNameFormat = CleanFileName(fileNameFormat)[span_25](end_span)
+            WordDoc.SaveAs2 savePath
+            WordDoc.Close False
+        End If
+SiguienteFila:
+    Next fila
+    WordApp.Quit
+    Set WordApp = Nothing
+    MsgBox "Proceso Terminado." [span_26](start_span)& vbCrLf & "Archivos generados: " & (cntNew + cntOpen + cntClosed), vbInformation[span_26](end_span)
+End Sub
+
+```
+### Nueva subrutina de apoyo para colores
+Esta función se encarga específicamente del requerimiento de la primera tabla, primera fila y segunda celda, aplicando los colores solicitados.
+```vba
+Private Sub AplicarColorSeveridad(ByVal doc As Object, ByVal sev As String)
+    On Error Resume Next
+    Dim celda As Object
+    [span_28](start_span)' Accede a la primera tabla, primera fila, segunda celda[span_28](end_span)
+    Set celda = doc.Tables(1).Cell(1, 2)
+    
+    If Not celda Is Nothing Then
+        Select Case UCase(Trim(sev))
+            Case "LOW"
+                [span_29](start_span)celda.Shading.BackgroundPatternColor = RGB(0, 176, 240) '#00B0F0[span_29](end_span)
+                [span_30](start_span)celda.Range.Font.ColorIndex = 1 ' Blanco (wdWhite)[span_30](end_span)
+            Case "MEDIUM"
+                [span_31](start_span)celda.Shading.BackgroundPatternColor = RGB(255, 255, 0) '#FFFF00[span_31](end_span)
+                [span_32](start_span)celda.Range.Font.ColorIndex = 0 ' Negro (wdBlack)[span_32](end_span)
+            Case "HIGH"
+                [span_33](start_span)celda.Shading.BackgroundPatternColor = RGB(255, 0, 0)   '#FF0000[span_33](end_span)
+                [span_34](start_span)celda.Range.Font.ColorIndex = 1 ' Blanco[span_34](end_span)
+            Case "CRITICAL"
+                [span_35](start_span)celda.Shading.BackgroundPatternColor = RGB(125, 51, 167) '#7D33A7[span_35](end_span)
+                [span_36](start_span)celda.Range.Font.ColorIndex = 1 ' Blanco[span_36](end_span)
+            Case "INFORMATIONAL"
+                [span_37](start_span)celda.Shading.BackgroundPatternColor = RGB(202, 228, 251) '#CAE4FB[span_37](end_span)
+                [span_38](start_span)celda.Range.Font.ColorIndex = 0 ' Negro[span_38](end_span)
+        End Select
+    End If
+    On Error GoTo 0
+End Sub
+
+```
+**Nota:** He mantenido todas tus funciones de apoyo (GetColumnIndex, IsRelativePath, BorrarParrafoSiExiste, InsertarImagenWord, CleanFileName) intactas tal como aparecen en tu archivo para no alterar su funcionamiento actual. Solo asegúrate de tener definida la función WordAppReemplazarParrafo en tu módulo, ya que la macro la invoca.
