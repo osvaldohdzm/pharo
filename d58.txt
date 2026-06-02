@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Demo HTA - Hello Work</title>
+    <hta:application id="demo" applicationname="HelloWork" border="thin" />
+</head>
+<body>
+    <h1>HTA: hello Work</h1>
+    <button onclick="alert('hello Work')">Mostrar Alert</button>
+    <script>
+        // Alert automático al abrir el HTA
+        alert("hello Work");
+    </script>
+</body>
+</html>
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Demo Hello Work</title>
+</head>
+<body>
+    <h1>Ejemplo: alert "hello Work"</h1>
+    <button onclick="mostrarAlerta()">Haz clic para el alert</button>
+
+    <script>
+        function mostrarAlerta() {
+            alert("hello Work");
+        }
+
+        // También se puede mostrar automáticamente al cargar la página
+        // window.onload = function() { alert("hello Work"); };
+    </script>
+</body>
+</html>
+
+
+Entiendo: Tienes CMD y PowerShell bloqueados, y necesitas alternativas para ejecutar código (por ejemplo, mostrar un alert con "hello Work" o probar algo tipo "cítricos breakout"). Aquí tienes varias opciones que podrían funcionar incluso en entornos restringidos:
+
+1. HTA (HTML Application) – suele esquivar muchas restricciones
+
+Guarda esto como prueba.hta y haz doble clic:
+
+```hta
+<!DOCTYPE html>
+<html>
+<head><title>Demo</title></head>
+<body>
+<script>
+alert("hello Work");
+</script>
+</body>
+</html>
+```
+
+Si se abre, funcionó. Si no, el bloqueo es más profundo.
+
+2. VBScript (.vbs) – si WSH no está deshabilitado
+
+Guarda como mensaje.vbs y ejecuta con doble clic:
+
+```vb
+MsgBox "hello Work"
+```
+
+O desde el cuadro Ejecutar (Win+R) si no está bloqueado:
+
+```
+wscript.exe C:\ruta\mensaje.vbs
+```
+
+(Si wscript.exe también está bloqueado, no funcionará)
+
+3. JavaScript con WSH (.js)
+
+Guarda como hola.js:
+
+```javascript
+WScript.Echo("hello Work");
+```
+
+Doble clic o wscript.exe hola.js.
+Si no aparece, prueba cscript.exe hola.js (consola, pero CMD está bloqueado… entonces probablemente no).
+
+4. Archivo .html normal – si el navegador está permitido
+
+Crea test.html:
+
+```html
+<script>alert("hello Work");</script>
+```
+
+Ábrelo con Edge/Chrome/IE. En entornos corporativos a veces el navegador sí corre.
+
+5. Mshta desde el cuadro Ejecutar (Win+R) – sin necesidad de CMD
+
+Presiona Win + R y escribe:
+
+```
+mshta vbscript:MsgBox("hello Work",64,"Demo")(window.close)
+```
+
+Si se ejecuta, el motor HTA/VBScript está activo.
+
+6. Archivo .jse o .vbe (versiones codificadas, a veces menos bloqueadas)
+
+Mismo contenido que .vbs pero con extensión .vbe (encoded). No es garantía, pero algunos bloqueos solo miran .vbs.
+
+¿Qué probar primero?
+
+· HTA (porque a menudo no lo bloquean aunque CMD y PowerShell sí).
+· HTML con alert (el navegador casi siempre funciona).
+· Win+R con mshta (si está permitido el acceso a mshta.exe).
+
+Sobre "cítricos breakout"
+
+Si querías demostrar un juego Breakout con temática cítrica (limones, naranjas), puedo adaptar el código HTA para que incluya un canvas y al perder muestre alert("hello Work"). Solo confírmalo y lo desarrollo.
+
+Nota de seguridad: Si el entorno bloquea CMD y PowerShell por políticas, probablemente también tenga restringida la ejecución de scripts (WSH, HTA, etc.). En ese caso, tu única alternativa real sería un navegador web o una aplicación portable (por ejemplo, un .exe que no requiera instalación). ¿Necesitas que profundice en alguna de estas?
