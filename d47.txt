@@ -1,0 +1,183 @@
+Sub SepararDefectos_ConLogVerboso()
+    Dim docSource As Document
+    Dim para As Paragraph
+    Dim estiloBuscado As String
+    Dim rngStart As Long, rngEnd As Long
+    Dim defectCount As Integer, totalParas As Long
+    Dim rutaCarpeta As String, logPath As String
+    Dim logText As String
+    Dim flagEncontrado As Boolean
+    Dim uniqueStyles As String
+    
+    ' =========================================================================
+    ' CONFIGURACIÓN DE ESTILO (Revisa el archivo LOG si vuelve a dar 0)
+    ' =========================================================================
+    estiloBuscado = "Heading 2" ' Cambiar a "Título 2" si tu Word está en español
+    ' =========================================================================
+    
+    Set docSource = ActiveDocument
+    rutaCarpeta = docSource.Path
+    
+    If rutaCarpeta = "" Then
+        MsgBox "ERROR CRÍTICO: Debes guardar el documento original en tu equipo antes de ejecutar la macro para poder generar los archivos y el Log.", vbCritical, "Archivo no Guardado"
+        Exit Sub
+    End If
+    rutaCarpeta = rutaCarpeta & "\"
+    logPath = rutaCarpeta & "LOG_DE_EJECUCION.txt"
+    
+    ' Inicializar Log Detallado
+    logText = "=========================================================================" & vbCrLf
+    logText = logText & "LOG DE OPERACIÓN - CROS CYBERSECURITY AUTOMATION" & vbCrLf
+    logText = logText & "Fecha y Hora: " & Now & vbCrLf
+    logText = logText & "Documento Origen: " & docSource.Name & vbCrLf
+    logText = logText & "Estilo de Título Configurado: [" & estiloBuscado & "]" & vbCrLf
+    logText = logText & "=========================================================================" & vbCrLf & vbCrLf
+    
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = wdAlertsNone
+    
+    totalParas = docSource.Paragraphs.Count
+    logText = logText & "[INFO] Total de párrafos detectados en el documento: " & totalParas & vbCrLf
+    
+    defectCount = 0
+    rngStart = 0
+    flagEncontrado = False
+    uniqueStyles = ""
+    
+    ' Fase 1: Escaneo analítico de párrafos y mapeo de estilos
+    On Error Resume Next
+    For Each para In docSource.Paragraphs
+        Dim currentStyle As String
+        currentStyle = para.Style
+        
+        ' Registrar estilos únicos encontrados en el documento para diagnóstico del usuario
+        If InStr(uniqueStyles, "[" & currentStyle & "]") = 0 Then
+            uniqueStyles = uniqueStyles & "[" & currentStyle & "] "
+        End If
+        
+        ' Comprobar coincidencia de estilo para segmentación
+        If currentStyle = estiloBuscado Then
+            logText = logText & "[COINCIDENCIA] Encontrado posible inicio de defecto en párrafo con texto: """ & Left(Trim(para.Range.Text), 60) & "...""" & vbCrLf
+            
+            If rngStart > 0 Then
+                rngEnd = para.Range.Start
+                defectCount = defectCount + 1
+                logText = logText & "[PROCESO] Extrayendo Defecto " & Format(defectCount, "00") & " (Rango: " & rngStart & " a " & rngEnd & ")" & vbCrLf
+                CrearDocumentoConReglas docSource, rngStart, rngEnd, defectCount, rutaCarpeta, logText
+            End If
+            rngStart = para.Range.Start
+            flagEncontrado = True
+        End If
+    Next para
+    On Error GoTo 0
+    
+    ' Procesar el último bloque residual de hallazgos
+    If flagEncontrado And rngStart > 0 Then
+        defectCount = defectCount + 1
+        rngEnd = docSource.Content.End
+        logText = logText & "[PROCESO] Extrayendo Último Defecto " & Format(defectCount, "00") & " (Rango: " & rngStart & " a " & rngEnd & ")" & vbCrLf
+        CrearDocumentoConReglas docSource, rngStart, rngEnd, defectCount, rutaCarpeta, logText
+    End If
+    
+    ' Si no se generó nada, volcar diagnóstico especial al log
+    If defectCount = 0 Then
+        logText = logText & vbCrLf & "-------------------------------------------------------------------------" & vbCrLf
+        logText = logText & "[ALERTA / ERROR] No se encontraron párrafos que coincidan con el estilo [" & estiloBuscado & "]." & vbCrLf
+        logText = logText & "[DIAGNÓSTICO] Los estilos reales que existen en tu documento son:" & vbCrLf
+        logText = logText & uniqueStyles & vbCrLf
+        logText = logText & "[SOLUCIÓN] Elige uno de los estilos anteriores y cámbialo en la línea 'estiloBuscado = ...' al inicio de la macro." & vbCrLf
+        logText = logText & "-------------------------------------------------------------------------" & vbCrLf
+    End If
+    
+    logText = logText & vbCrLf & "=========================================================================" & vbCrLf
+    logText = logText & "FIN DEL PROCESO. Total documentos creados: " & defectCount & vbCrLf
+    logText = logText & "=========================================================================" & vbCrLf
+    
+    ' Escribir el archivo Log físico en el disco
+    GuardarLogFisico logPath, logText
+    
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = wdAlertsAll
+    
+    ' Notificación final en pantalla
+    If defectCount = 0 Then
+        MsgBox "Se procesó el documento pero se generaron 0 archivos." & vbCrLf & _
+               "Esto es un problema de asignación de estilos." & vbCrLf & _
+               "Se ha guardado un reporte de diagnóstico en: " & vbCrLf & logPath, vbExclamation, "Verificar Estilos"
+    Else
+        MsgBox "¡Proceso Completado con éxito!" & vbCrLf & _
+               "Documentos generados: " & defectCount & vbCrLf & _
+               "Puedes revisar el log detallado en la carpeta de destino.", vbInformation, "Éxito - CROS Cybersecurity"
+    End If
+End Sub
+
+Private Sub CrearDocumentoConReglas(ByRef srcDoc As Document, ByVal pIni As Long, ByVal pFin As Long, ByVal numDef As Integer, ByVal pathDestino As String, ByRef log As String)
+    Dim rng As Range
+    Dim newDoc As Document
+    Dim ils As InlineShape
+    Dim shp As Shape
+    Dim pathSalida As String
+    
+    Set rng = srcDoc.Range(Start:=pIni, End:=pFin)
+    Set newDoc = Documents.Add
+    
+    ' Replicar la configuración geométrica de márgenes de la plantilla
+    With newDoc.PageSetup
+        .TopMargin = srcDoc.PageSetup.TopMargin
+        .BottomMargin = srcDoc.PageSetup.BottomMargin
+        .LeftMargin = srcDoc.PageSetup.LeftMargin
+        .RightMargin = srcDoc.PageSetup.RightMargin
+        .PageWidth = srcDoc.PageSetup.PageWidth
+        .PageHeight = srcDoc.PageSetup.PageHeight
+        .Orientation = srcDoc.PageSetup.Orientation
+    End With
+    
+    ' Clonación de contenido manteniendo estilos originales intactos
+    rng.Copy
+    newDoc.Range.PasteAndFormat wdFormatOriginalFormatting
+    
+    log = log & "   -> [IMÁGENES] Iniciando formateo de evidencias para el Defecto " & numDef & vbCrLf
+    
+    ' Tratamiento de InlineShapes (Imágenes integradas al flujo de texto básico)
+    For Each ils In newDoc.InlineShapes
+        ils.Range.ParagraphFormat.Alignment = wdAlignParagraphCenter
+        log = log & "      - Imagen inline centrada horizontalmente." & vbCrLf
+        
+        ' Condición de dimensionamiento de aspecto solicitado
+        If ils.Width > ils.Height Then
+            ils.LockAspectRatio = msoTrue
+            ils.Width = Application.CentimetersToPoints(17)
+            log = log & "      - [AJUSTE] Imagen horizontal detectada. Ancho modificado a 17 cm de forma proporcional." & vbCrLf
+        Else
+            log = log & "      - [OMISIÓN] Imagen vertical detectada. Se mantienen dimensiones de origen." & vbCrLf
+        End If
+    Next ils
+    
+    ' Tratamiento de Shapes (Imágenes flotantes con ajuste de diseño avanzado)
+    For Each shp In newDoc.Shapes
+        shp.Left = wdShapeCenter
+        log = log & "      - Figura flotante centrada en la página." & vbCrLf
+        
+        If shp.Width > shp.Height Then
+            shp.LockAspectRatio = msoTrue
+            shp.Width = Application.CentimetersToPoints(17)
+            log = log & "      - [AJUSTE] Figura horizontal detectada. Escalada a 17 cm." & vbCrLf
+        End If
+    Next shp
+    
+    pathSalida = pathDestino & "DEFECT_" & Format(numDef, "02") & "_CYBERSECURITY.docx"
+    newDoc.SaveAs2 FileName:=pathSalida, FileFormat:=wdFormatXMLDocument
+    newDoc.Close SaveChanges:=wdDoNotSaveChanges
+    log = log & "   -> [GUARDADO] Archivo creado exitosamente: " & pathSalida & vbCrLf & vbCrLf
+End Sub
+
+Private Sub GuardarLogFisico(ByVal rutaFile As String, ByVal textoLog As String)
+    Dim fso As Object
+    Dim fileStream As Object
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set fileStream = fso.CreateTextFile(rutaFile, True)
+    fileStream.Write textoLog
+    fileStream.Close
+    Set fileStream = Nothing
+    Set fso = Nothing
+End Sub
