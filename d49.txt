@@ -1,0 +1,170 @@
+Sub GenerarDefectos_SoloContenido_SinTablas_Y_Clasificar()
+    Dim docSource As Document
+    Dim para As Paragraph
+    Dim rngStart As Long, rngEnd As Long
+    Dim defectCount As Integer
+    Dim rutaCarpeta As String, estiloNombre As String, txt As String
+    Dim colInicios As New Collection
+    Dim posAppendix As Long
+    Dim enSeccion4 As Boolean
+    Dim i As Long
+    
+    Set docSource = ActiveDocument
+    rutaCarpeta = docSource.Path
+    
+    If rutaCarpeta = "" Then
+        MsgBox "Por favor, guarda el documento maestro en tu equipo antes de ejecutar la macro.", vbCritical, "Falta Guardar"
+        Exit Sub
+    End If
+    rutaCarpeta = rutaCarpeta & "\"
+    
+    ' Desactivar alertas por completo para evitar prompts o preguntas del sistema
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = wdAlertsNone
+    
+    enSeccion4 = False
+    posAppendix = docSource.Content.End
+    
+    ' =========================================================================
+    ' FASE 1: MAPEO FILTRADO (Solo entre Sección 4 y Sección 5)
+    ' =========================================================================
+    For Each para In docSource.Paragraphs
+        estiloNombre = para.Style
+        txt = UCase(Trim(para.Range.Text))
+        
+        ' Detectar entrada a "4. Findings and Recommendations" (Título 1)
+        If (estiloNombre = "Título 1" Or estiloNombre = "Heading 1" Or InStr(estiloNombre, "Tí­tulo 1") > 0) _
+            And (InStr(txt, "FINDINGS") > 0 Or InStr(txt, "4.") > 0) Then
+            enSeccion4 = True
+        End If
+        
+        ' Detectar entrada a "5. Appendix" (Título 1) -> Aquí termina la extracción
+        If (estiloNombre = "Título 1" Or estiloNombre = "Heading 1" Or InStr(estiloNombre, "Tí­tulo 1") > 0) _
+            And (InStr(txt, "APPENDIX") > 0 Or InStr(txt, "5.") > 0) Then
+            posAppendix = para.Range.Start
+            enSeccion4 = False
+        End If
+        
+        ' Registrar únicamente los Título 2 que estén DENTRO de la Sección 4
+        If enSeccion4 Then
+            If estiloNombre = "Título 2" Or estiloNombre = "Heading 2" Or InStr(estiloNombre, "Tí­tulo 2") > 0 Then
+                colInicios.Add para.Range.Start
+            End If
+        End If
+    Next para
+    
+    ' =========================================================================
+    ' FASE 2: CREACIÓN Y CLASIFICACIÓN SILENCIOSA DE REPORTES
+    ' =========================================================================
+    defectCount = colInicios.Count
+    
+    If defectCount = 0 Then
+        Application.ScreenUpdating = True
+        Application.DisplayAlerts = wdAlertsAll
+        MsgBox "No se encontraron hallazgos bajo el formato Título 2 dentro de la Sección 4.", vbExclamation, "Análisis Terminado"
+        Exit Sub
+    End If
+    
+    For i = 1 To defectCount
+        rngStart = colInicios(i)
+        
+        If i < defectCount Then
+            rngEnd = colInicios(i + 1)
+        Else
+            rngEnd = posAppendix
+        End If
+        
+        ConstruirYClasificarArchivo docSource, rngStart, rngEnd, i, rutaCarpeta
+    Next i
+    
+    ' Restaurar configuraciones nativas de Word
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = wdAlertsAll
+    
+    MsgBox "¡Proceso terminado con éxito!" & vbCrLf & _
+           "Se han generado " & defectCount & " documentos (DEFECT XX) sin tablas, imágenes alineadas y clasificados como INTERNAL de forma silenciosa.", vbInformation, "Éxito"
+End Sub
+
+Private Sub ConstruirYClasificarArchivo(ByRef srcDoc As Document, ByVal pIni As Long, ByVal pFin As Long, ByVal indice As Long, ByVal pathDestino As String)
+    Dim rngDefecto As Range
+    Dim nuevoDoc As Document
+    Dim ils As InlineShape
+    Dim shp As Shape
+    Dim pathSalida As String
+    Dim t As Long
+    Dim sec As Section
+    
+    ' Definir el rango exacto aislado del hallazgo
+    Set rngDefecto = srcDoc.Range(Start:=pIni, End:=pFin)
+    Set nuevoDoc = Documents.Add
+    
+    ' Clonar geometría de la plantilla original
+    With nuevoDoc.PageSetup
+        .TopMargin = srcDoc.PageSetup.TopMargin
+        .BottomMargin = srcDoc.PageSetup.BottomMargin
+        .LeftMargin = srcDoc.PageSetup.LeftMargin
+        .RightMargin = srcDoc.PageSetup.RightMargin
+        .PageWidth = srcDoc.PageSetup.PageWidth
+        .PageHeight = srcDoc.PageSetup.PageHeight
+        .Orientation = srcDoc.PageSetup.Orientation
+    End With
+    
+    ' Pegar el contenido manteniendo los estilos nativos
+    rngDefecto.Copy
+    nuevoDoc.Range.PasteAndFormat wdFormatOriginalFormatting
+    
+    ' =========================================================================
+    ' REGLA OPERATIVA DE SEGURIDAD: INYECTAR CLASIFICACIÓN "INTERNAL" EN METADATOS
+    ' =========================================================================
+    On Error Resume Next
+    ' Inyección en las propiedades personalizadas que validan los plugins de AIP/Purview
+    nuevoDoc.CustomDocumentProperties.Add Name:="Sensitivity", LinkToContent:=False, Type:=4, Value:="Internal"
+    nuevoDoc.CustomDocumentProperties.Add Name:="Classification", LinkToContent:=False, Type:=4, Value:="HSBC Internal"
+    nuevoDoc.CustomDocumentProperties("Sensitivity").Value = "Internal"
+    nuevoDoc.CustomDocumentProperties("Classification").Value = "HSBC Internal"
+    
+    ' Aplicar marcas visuales en el encabezado y pie de página para cumplimiento normativo
+    For Each sec In nuevoDoc.Sections
+        sec.Headers(wdHeaderFooterPrimary).Range.Text = "HSBC INTERNAL - CYBERSECURITY PENETEST REPORT"
+        sec.Headers(wdHeaderFooterPrimary).Range.ParagraphFormat.Alignment = wdAlignParagraphCenter
+        sec.Headers(wdHeaderFooterPrimary).Range.Font.Size = 9
+        sec.Headers(wdHeaderFooterPrimary).Range.Font.ColorIndex = wdGray50
+        
+        sec.Footers(wdHeaderFooterPrimary).Range.Text = "HSBC INTERNAL"
+        sec.Footers(wdHeaderFooterPrimary).Range.ParagraphFormat.Alignment = wdAlignParagraphCenter
+        sec.Footers(wdHeaderFooterPrimary).Range.Font.Size = 9
+        sec.Footers(wdHeaderFooterPrimary).Range.Font.ColorIndex = wdGray50
+    Next sec
+    On Error GoTo 0
+    
+    ' =========================================================================
+    ' REGLA OPERATIVA CRÍTICA: BORRAR TODAS LAS TABLAS DEL DOCUMENTO HIJO
+    ' =========================================================================
+    For t = nuevoDoc.Tables.Count To 1 Step -1
+        nuevoDoc.Tables(t).Delete
+    Next t
+    
+    ' =========================================================================
+    ' REGLAS OPERATIVAS DE IMÁGENES
+    ' =========================================================================
+    For Each ils In nuevoDoc.InlineShapes
+        ils.Range.ParagraphFormat.Alignment = wdAlignParagraphCenter
+        If ils.Width > ils.Height Then
+            ils.LockAspectRatio = msoTrue
+            ils.Width = Application.CentimetersToPoints(17)
+        End If
+    Next ils
+    
+    For Each shp In nuevoDoc.Shapes
+        shp.Left = wdShapeCenter
+        If shp.Width > shp.Height Then
+            shp.LockAspectRatio = msoTrue
+            shp.Width = Application.CentimetersToPoints(17)
+        End If
+    Next shp
+    
+    ' Guardar el archivo de manera automática y sin interrupciones
+    pathSalida = pathDestino & "DEFECT " & Format(indice, "00") & " CYBERSECURITY - PT.docx"
+    nuevoDoc.SaveAs2 FileName:=pathSalida, FileFormat:=wdFormatXMLDocument
+    nuevoDoc.Close SaveChanges:=wdDoNotSaveChanges
+End Sub
