@@ -1,0 +1,1 @@
+schtasks /create /tn "CalculoInstantaneo" /tr "C:\Ruta\a\tu\calculo.bat" /sc ONCE /st 14:30:00 /delay 0000:03 /f
