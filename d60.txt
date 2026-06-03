@@ -1,0 +1,215 @@
+Sub GenerarReportes_Plantilla_Y_NombresReales()
+    Dim docSource As Document
+    Dim para As Paragraph
+    Dim rngStart As Long, rngEnd As Long
+    Dim defectCount As Integer
+    Dim rutaCarpeta As String, estiloNombre As String, txt As String
+    Dim colInicios As New Collection
+    Dim colTitulos As New Collection
+    Dim posAppendix As Long
+    Dim enSeccion4 As Boolean
+    Dim i As Long
+    Dim fd As Object
+    Dim rutaPlantilla As String
+    
+    Set docSource = ActiveDocument
+    rutaCarpeta = docSource.Path
+    
+    If rutaCarpeta = "" Then
+        MsgBox "Por favor, guarda el documento maestro antes de ejecutar la macro.", vbCritical, "Guardar Archivo"
+        Exit Sub
+    End If
+    rutaCarpeta = rutaCarpeta & "\"
+    
+    ' =========================================================================
+    ' PUNTO 3: SELECCIÓN DE LA PLANTILLA DE DEFECTOS
+    ' =========================================================================
+    Set fd = Application.FileDialog(3) ' msoFileDialogFilePicker
+    With fd
+        .Title = "Selecciona la Plantilla de Defectos (La que contiene el formato limpio)"
+        .Filters.Clear
+        .Filters.Add "Documentos de Word", "*.docx; *.dotx"
+        .AllowMultiSelect = False
+        If .Show = -1 Then
+            rutaPlantilla = .SelectedItems(1)
+        Else
+            MsgBox "Operación cancelada. Se requiere la plantilla para continuar.", vbExclamation, "Proceso Detenido"
+            Exit Sub
+        End If
+    End With
+    
+    ' Desactivar alertas y actualizaciones de pantalla para evitar congelamientos y popups
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = wdAlertsNone
+    
+    enSeccion4 = False
+    posAppendix = docSource.Content.End
+    
+    ' =========================================================================
+    ' FASE 1: MAPEO FILTRADO (Sección 4. Findings al Appendix)
+    ' =========================================================================
+    For Each para In docSource.Paragraphs
+        estiloNombre = para.Style
+        txt = UCase(Trim(para.Range.Text))
+        
+        ' Detectar inicio de Sección 4 (Título 1)
+        If (estiloNombre = "Título 1" Or estiloNombre = "Heading 1" Or InStr(estiloNombre, "Tí­tulo 1") > 0) _
+            And (InStr(txt, "FINDINGS") > 0 Or InStr(txt, "4.") > 0) Then
+            enSeccion4 = True
+        End If
+        
+        ' Detectar inicio de Sección 5 Appendix (Título 1) -> Fin de lectura
+        If (estiloNombre = "Título 1" Or estiloNombre = "Heading 1" Or InStr(estiloNombre, "Tí­tulo 1") > 0) _
+            And (InStr(txt, "APPENDIX") > 0 Or InStr(txt, "5.") > 0) Then
+            posAppendix = para.Range.Start
+            enSeccion4 = False
+        End If
+        
+        ' Registrar los hallazgos (Título 2) dentro de la Sección 4
+        If enSeccion4 Then
+            If estiloNombre = "Título 2" Or estiloNombre = "Heading 2" Or InStr(estiloNombre, "Tí­tulo 2") > 0 Then
+                If Len(Trim(Replace(para.Range.Text, vbCr, ""))) > 3 Then
+                    colInicios.Add para.Range.Start
+                    colTitulos.Add Replace(para.Range.Text, vbCr, "")
+                End If
+            End If
+        End If
+    Next para
+    
+    ' =========================================================================
+    ' FASE 2: PROCESAMIENTO EXTRACCIÓN Y NOMENCLATURA DINÁMICA
+    ' =========================================================================
+    defectCount = colInicios.Count
+    
+    If defectCount = 0 Then
+        Application.ScreenUpdating = True
+        Application.DisplayAlerts = wdAlertsAll
+        MsgBox "No se encontraron hallazgos (Título 2) dentro de la Sección 4.", vbExclamation, "Fin"
+        Exit Sub
+    End If
+    
+    For i = 1 To defectCount
+        rngStart = colInicios(i)
+        
+        If i < defectCount Then
+            rngEnd = colInicios(i + 1)
+        Else
+            rngEnd = posAppendix
+        End If
+        
+        ' Llamar al constructor pasando el nombre crudo del hallazgo mapeado
+        ConstruirReporteIndividual docSource, rngStart, rngEnd, i, rutaCarpeta, colTitulos(i), rutaPlantilla
+    Next i
+    
+    Application.ScreenUpdating = True
+    Application.DisplayAlerts = wdAlertsAll
+    
+    MsgBox "¡Proceso terminado con éxito!" & vbCrLf & _
+           "Se han generado " & defectCount & " reportes basados en plantilla, sin tablas y con nombres reales.", vbInformation, "Éxito - CROS"
+End Sub
+
+Private Sub ConstruirReporteIndividual(ByRef srcDoc As Document, ByVal pIni As Long, ByVal pFin As Long, ByVal indice As Long, ByVal pathDestino As String, ByVal nombreHallazgo As String, ByVal pathPlantilla As String)
+    Dim rngDefecto As Range
+    Dim nuevoDoc As Document
+    Dim ils As InlineShape
+    Dim shp As Shape
+    Dim pathSalida As String
+    Dim txtBloque As String
+    Dim t As Long
+    
+    ' Variables para parsear nombres reales (Punto 1)
+    Dim detectedSeverity As String
+    Dim detectedIssueID As String
+    Dim posId As Long, k As Long
+    Dim chunkId As String, ch As String
+    
+    ' 1. Aislar rango del defecto en el maestro
+    Set rngDefecto = srcDoc.Range(Start:=pIni, End:=pFin)
+    txtBloque = rngDefecto.Text
+    
+    ' --- PARSER AUTOMÁTICO DE METADATOS ---
+    ' A. Extraer Severidad de forma inteligente
+    detectedSeverity = "LOW" ' Valor por defecto si falla
+    If InStr(UCase(txtBloque), "CRITICAL") > 0 Then detectedSeverity = "CRITICAL"
+    If InStr(UCase(txtBloque), "HIGH") > 0 Then detectedSeverity = "HIGH"
+    If InStr(UCase(txtBloque), "MEDIUM") > 0 Then detectedSeverity = "MEDIUM"
+    If InStr(UCase(txtBloque), "LOW") > 0 Then detectedSeverity = "LOW"
+    If InStr(UCase(txtBloque), "INFORMATIONAL") > 0 Then detectedSeverity = "INFORMATIONAL"
+    
+    ' B. Extraer el número de ISSUE ID dinámicamente
+    detectedIssueID = "XXXXX" ' Valor genérico por defecto
+    posId = InStr(UCase(txtBloque), "ISSUE ID")
+    If posId > 0 Then
+        chunkId = Trim(Mid(txtBloque, posId + 8, 15))
+        chunkId = Replace(chunkId, ":", "")
+        chunkId = Replace(chunkId, "-", "")
+        Dim idAcumulado As String
+        idAcumulado = ""
+        For k = 1 To Len(chunkId)
+            ch = Mid(chunkId, k, 1)
+            If ch Like "[0-9]" Then
+                idAcumulado = idAcumulado & ch
+            Else
+                If Len(idAcumulado) > 0 Then Exit For
+            End If
+        Next k
+        If Len(idAcumulado) > 0 Then detectedIssueID = idAcumulado
+    End If
+    
+    ' 2. Crear documento hijo BASADO EN LA PLANTILLA ELEGIDA (Punto 3)
+    Set nuevoDoc = Documents.Add(Template:=pathPlantilla)
+    
+    ' 3. Copiar contenido y pegar respetando estilos nativos (Título 2 y Título 3)
+    rngDefecto.Copy
+    nuevoDoc.Range.PasteAndFormat wdFormatOriginalFormatting
+    
+    ' =========================================================================
+    ' REGLA OPERATIVA: BORRAR TODAS LAS TABLAS DEL DOCUMENTO
+    ' =========================================================================
+    For t = nuevoDoc.Tables.Count To 1 Step -1
+        nuevoDoc.Tables(t).Delete
+    Next t
+    
+    ' =========================================================================
+    ' REGLAS OPERATIVAS DE IMÁGENES (Centrar y ajustar a 17cm horizontales)
+    ' =========================================================================
+    For Each ils In nuevoDoc.InlineShapes
+        ils.Range.ParagraphFormat.Alignment = wdAlignParagraphCenter
+        If ils.Width > ils.Height Then
+            ils.LockAspectRatio = msoTrue
+            ils.Width = Application.CentimetersToPoints(17)
+        End If
+    Next ils
+    
+    For Each shp In nuevoDoc.Shapes
+        shp.Left = wdShapeCenter
+        If shp.Width > shp.Height Then
+            shp.LockAspectRatio = msoTrue
+            shp.Width = Application.CentimetersToPoints(17)
+        End If
+    Next shp
+    
+    ' =========================================================================
+    ' CONSTRUCCIÓN DEL NOMBRE DEL ARCHIVO (Punto 1)
+    ' =========================================================================
+    ' Limpiar caracteres ilegales del título del hallazgo
+    nombreHallazgo = CleanStringForFileName(nombreHallazgo)
+    
+    pathSalida = pathDestino & "DEFECT " & Format(indice, "00") & " CYBERSECURITY - PT - " & _
+                 nombreHallazgo & " - ISSUE ID " & detectedIssueID & " - " & detectedSeverity & ".docx"
+    
+    ' Guardado forzado silencioso heredando etiqueta de la plantilla (Punto 2)
+    nuevoDoc.SaveAs2 FileName:=pathSalida, FileFormat:=wdFormatXMLDocument
+    nuevoDoc.Close SaveChanges:=wdDoNotSaveChanges
+End Sub
+
+Private Function CleanStringForFileName(ByVal texto As String) As String
+    Dim invalidChars As Variant
+    Dim i As Long
+    invalidChars = Array("\", "/", ":", "*", "?", """", "<", ">", "|", vbCr, vbLf, Chr(10), Chr(13))
+    texto = Trim(texto)
+    For i = LBound(invalidChars) To UBound(invalidChars)
+        texto = Replace(texto, invalidChars[i], "")
+    Next i
+    CleanStringForFileName = texto
+End Function
