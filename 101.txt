@@ -1,0 +1,468 @@
+
+Para sacarle el máximo provecho a la auditoría pasiva, podemos convertir el listado de tu archivo en **Bambdas de Burp Suite** (scripts de filtrado en Java para el *HTTP History*) basándonos en la sintaxis de la API de Montoya que adjuntaste.
+Aquí tienes la colección de filtros listos para copiar, pegar y guardar en tu librería, mapeados estrictamente a las pruebas de tu alcance:
+### 1. Fingerprint Web Application / Frameworks
+ * **Pruebas asociadas:** Fingerprint Web Application y Fingerprint Web Application Framework.
+ * **Objetivo:** Capturar respuestas del servidor que contengan cabeceras explícitas de revelación de tecnología, equivalentes a tu script de reconocimiento.
+```java
+if (!requestResponse.hasResponse()) {
+    return false;
+}
+var headers = requestResponse.response().headers();
+for (var header : headers) {
+    var name = header.name().toLowerCase();
+    if (name.equals("server") || name.equals("x-powered-by") || 
+        name.equals("x-aspnet-version") || name.equals("x-generator") || 
+        name.equals("via") || name.equals("x-runtime")) {
+        return true;
+    }
+}
+return false;
+
+```
+### 2. Old Backup and Unreferenced Files
+ * **Prueba asociada:** Review Old Backup and Unreferenced Files for Sensitive Information.
+ * **Objetivo:** Filtrar peticiones que hayan devuelto un 200 OK apuntando a extensiones críticas de copias de seguridad o repositorios.
+```java
+if (!requestResponse.hasResponse()) {
+    return false;
+}
+var path = requestResponse.request().path().toLowerCase();
+var status = requestResponse.response().statusCode();
+
+boolean isBackupExt = path.endsWith(".bak") || path.endsWith(".old") || 
+                      path.endsWith(".zip") || path.endsWith(".tar.gz") || 
+                      path.endsWith(".swp") || path.contains("/.git/");
+
+return isBackupExt && (status == 200);
+
+```
+### 3. Test HTTP Methods
+ * **Prueba asociada:** Test HTTP Methods.
+ * **Objetivo:** Aislar de forma inmediata cualquier petición que no utilice los verbos estándar de navegación.
+```java
+var method = requestResponse.request().method().toUpperCase();
+return !method.equals("GET") && !method.equals("POST") && !method.equals("OPTIONS");
+
+```
+### 4. HTTP Strict Transport Security (HSTS)
+ * **Prueba asociada:** Test HTTP Strict Transport Security.
+ * **Objetivo:** Encontrar respuestas que viajen por el protocolo HTTPS pero que hayan omitido la cabecera obligatoria de seguridad de transporte.
+```java
+if (!requestResponse.hasResponse()) {
+    return false;
+}
+var req = requestResponse.request();
+var res = requestResponse.response();
+
+return req.url().startsWith("https://") && !res.hasHeader("Strict-Transport-Security");
+
+```
+### 5. Insecure Credentials Transport
+ * **Prueba asociada:** Testing for Credentials Transported over an Encrypted Channel.
+ * **Objetivo:** Cazar formularios de autenticación o parámetros de contraseña que se estén transmitiendo a través de HTTP plano en lugar de un canal cifrado.
+```java
+var req = requestResponse.request();
+var body = req.bodyToString().toLowerCase();
+var url = req.url().toLowerCase();
+
+boolean isHttp = url.startsWith("http://");
+boolean hasPassword = body.contains("password") || body.contains("passwd") || 
+                      body.contains("pwd") || body.contains("contrasena");
+
+return isHttp && hasPassword;
+
+```
+### 6. Insecure Cookies Attributes
+ * **Prueba asociada:** Testing for Cookies Attributes.
+ * **Objetivo:** Revelar cabeceras Set-Cookie enviadas por el backend que no estén protegidas por las banderas HttpOnly o Secure.
+```java
+if (!requestResponse.hasResponse()) {
+    return false;
+}
+var res = requestResponse.response();
+if (!res.hasHeader("Set-Cookie")) {
+    return false;
+}
+
+var cookies = res.headerValues("Set-Cookie");
+for (var cookie : cookies) {
+    var cLower = cookie.toLowerCase();
+    if (!cLower.contains("httponly") || !cLower.contains("secure")) {
+        return true;
+    }
+}
+return false;
+
+```
+### 7. Exposed Session Variables & URL JWTs
+ * **Pruebas asociadas:** Testing for Exposed Session Variables y JWT Tokens - Passing on the URL.
+ * **Objetivo:** Detectar identificadores de sesión, tokens de portador o JWTs pasados de forma insegura en la cadena de consulta (Query String) de la URL.
+```java
+var query = requestResponse.request().query().toLowerCase();
+
+if (query.isEmpty()) {
+    return false;
+}
+
+return query.contains("token=") || query.contains("sess=") || 
+       query.contains("sessionid=") || query.contains("jwt=") || 
+       query.contains("eyjh"); // 'eyJh' es el string en Base64 de {"alg" (inicio de un JWT)
+
+```
+### 8. Stack Traces / Error Handling
+ * **Pruebas asociadas:** Testing for Stack Traces y Sensitive Data Exposure in error messages.
+ * **Objetivo:** Resaltar códigos de error 5XX o respuestas que contengan fragmentos de código fuente y volcados de memoria.
+```java
+if (!requestResponse.hasResponse()) {
+    return false;
+}
+var res = requestResponse.response();
+var body = res.bodyToString().toLowerCase();
+
+boolean is5xx = res.statusCode() >= 500 && res.statusCode() < 600;
+boolean leakedTrace = body.contains("stack trace:") || body.contains("java.lang.") || 
+                      body.contains("traceback (most recent call last):") || 
+                      body.contains("syntax error");
+
+return is5xx || leakedTrace;
+
+```
+### 9. API Security Misconfiguration: CORS
+ * **Prueba asociada:** CORS.
+ * **Objetivo:** Identificar configuraciones de recursos compartidos de origen cruzado que estén abiertas al comodín universal.
+```java
+if (!requestResponse.hasResponse()) {
+    return false;
+}
+var res = requestResponse.response();
+if (res.hasHeader("Access-Control-Allow-Origin")) {
+    var origin = res.headerValue("Access-Control-Allow-Origin").trim();
+    return origin.equals("*") || origin.equals("null");
+}
+return false;
+
+```
+### 10. API Security Misconfiguration: Missing Headers
+ * **Prueba asociada:** Security Headers.
+ * **Objetivo:** Filtrar tráfico de la API cuyas respuestas carezcan de cabeceras de fortificación básicas contra el tipificado MIME o el enmarcado.
+```java
+if (!requestResponse.hasResponse()) {
+    return false;
+}
+var res = requestResponse.response();
+return !res.hasHeader("X-Content-Type-Options") || !res.hasHeader("X-Frame-Options");
+
+```
+### 11. PII Exposure / Excessive Data
+ * **Prueba asociada:** PII Exposure.
+ * **Objetivo:** Buscar fugas de información crítica explícita en el cuerpo de las respuestas, como llaves privadas asimétricas.
+```java
+if (!requestResponse.hasResponse()) {
+    return false;
+}
+var body = requestResponse.response().bodyToString();
+return body.contains("-----BEGIN PRIVATE KEY-----") || 
+       body.contains("-----BEGIN RSA PRIVATE KEY-----");
+
+```
+*(Tip de flujo de trabajo: En la ventana de filtros de Burp, utiliza el atajo **Ctrl + N** o **Cmd + N** para ir pegando cada bloque y guardándolos en tu Bambda Library con su respectivo nombre de hallazgo).*
+
+
+Copiado. Quieres la artillería pesada y completa para barrer la tabla sin dejar un solo rincón a oscuras.
+Basándome estrictamente en el alcance de tu archivo y en la API de Montoya, aquí tienes el **Masterpack Definitivo de Bambdas**. Para evitar que la máquina se arrastre con el Garbage Collector de Java, están optimizadas con evaluación de cortocircuito (si la petición no cumple el primer requisito, muere ahí sin gastar CPU analizando strings gigantes).
+### FASE I: RECONOCIMIENTO Y METADATOS (WSTG-INFO)
+#### 1. Caza de Metafiles y Entry Points Ocultos
+ * **Pruebas:** *Review Webserver Metafiles / Identify Entry Points*
+ * **Captura:** robots.txt, sitemap.xml, carpetas .well-known de OpenID/OAuth, y manifiestos de seguridad.
+```java
+if (!requestResponse.hasResponse()) return false;
+var path = requestResponse.request().path().toLowerCase();
+var status = requestResponse.response().statusCode();
+
+return (status == 200 || status == 301 || status == 302) && 
+       (path.contains("robots.txt") || path.contains("sitemap.xml") || 
+        path.contains("/.well-known/") || path.contains("security.txt") || 
+        path.contains("/api-docs"));
+
+```
+#### 2. Fingerprint Exhaustivo (Servidores, Frameworks y Generadores)
+ * **Pruebas:** *Fingerprint Web Application / Framework / Web Server*
+ * **Captura:** Versiones expuestas en cabeceras de servidor, motores de renderizado y cookies de sesión delatadoras (PHPSESSID, JSESSIONID, ASP.NET_SessionId).
+```java
+if (!requestResponse.hasResponse()) return false;
+var res = requestResponse.response();
+
+for (var header : res.headers()) {
+    var n = header.name().toLowerCase();
+    var v = header.value().toLowerCase();
+    if ((n.equals("server") && v.matches(".*[0-9].*")) || 
+        n.startsWith("x-powered-by") || n.startsWith("x-aspnet") || 
+        n.equals("x-generator") || n.equals("x-runtime")) {
+        return true;
+    }
+}
+for (var c : res.headerValues("Set-Cookie")) {
+    var cLow = c.toLowerCase();
+    if (cLow.contains("php") || cLow.contains("jsession") || cLow.contains("asp.net")) return true;
+}
+return false;
+
+```
+### FASE II: CONFIGURACIÓN, DEPLOYMENT Y NUBE (WSTG-CONF)
+#### 3. Fugas de Backups, Repositorios Git y Entornos (Goldmine)
+ * **Pruebas:** *Review Old Backup and Unreferenced Files*
+ * **Captura:** Solo respuestas 200 OK reales que devuelvan código fuente, bases de datos o archivos de configuración.
+```java
+if (!requestResponse.hasResponse() || requestResponse.response().statusCode() != 200) return false;
+var path = requestResponse.request().path().toLowerCase();
+
+return path.matches(".*\\.(bak|old|zip|tar|gz|7z|sql|db|sqlite|swp|bc|bkp|inc|env|config)$") || 
+       path.contains("/.git/") || path.contains("/.svn/") || path.contains("/.vscode/");
+
+```
+#### 4. Interfaces de Administración e Infraestructura
+ * **Pruebas:** *Enumerate Admin Interfaces / Test Application Platform Config*
+ * **Captura:** Paneles de control, endpoints de monitoreo (Spring Actuator) y volcados de PHP.
+```java
+if (!requestResponse.hasResponse() || requestResponse.response().statusCode() == 404) return false;
+var path = requestResponse.request().path().toLowerCase();
+
+return path.contains("/admin") || path.contains("/administrator") || 
+       path.contains("/dashboard") || path.contains("/phpinfo") || 
+       path.contains("/actuator") || path.contains("/server-status") || 
+       path.contains("/health") || path.contains("/metrics");
+
+```
+#### 5. Verbos HTTP Inseguros y Tampering
+ * **Pruebas:** *Test HTTP Methods*
+ * **Captura:** Peticiones que usan métodos propensos a ejecución o subida de archivos.
+```java
+var m = requestResponse.request().method().toUpperCase();
+return !m.equals("GET") && !m.equals("POST") && !m.equals("OPTIONS") && !m.equals("HEAD");
+
+```
+#### 6. Omisión de HSTS en Tráfico Seguro
+ * **Pruebas:** *Test HTTP Strict Transport Security*
+ * **Captura:** Sitios navegando por https:// cuyo servidor olvidó obligar al navegador a mantener el cifrado.
+```java
+if (!requestResponse.hasResponse()) return false;
+var req = requestResponse.request();
+return req.url().toLowerCase().startsWith("https://") && 
+       !requestResponse.response().hasHeader("Strict-Transport-Security");
+
+```
+#### 7. Políticas RIA de Dominio Cruzado Abiertas
+ * **Pruebas:** *Test RIA Cross Domain Policy*
+ * **Captura:** Archivos de herencia de Flash o Silverlight.
+```java
+var path = requestResponse.request().path().toLowerCase();
+return path.contains("crossdomain.xml") || path.contains("clientaccesspolicy.xml");
+
+```
+### FASE III: AUTENTICACIÓN Y SESIONES (WSTG-AUTH / SESS)
+#### 8. Envío de Credenciales en Texto Plano (HTTP / Body)
+ * **Pruebas:** *Testing for Credentials Transported over an Encrypted Channel* (HTTP plano)
+ * **Captura:** Parámetros de contraseña viajando por la red sin TLS.
+```java
+var req = requestResponse.request();
+if (!req.url().toLowerCase().startsWith("http://")) return false;
+
+var body = req.bodyToString().toLowerCase();
+return body.contains("password") || body.contains("passwd") || 
+       body.contains("pwd") || body.contains("contrasena");
+
+```
+#### 9. Hardening Deficiente de Cookies
+ * **Pruebas:** *Testing for Cookies Attributes*
+ * **Captura:** Cookies emitidas sin Secure, sin HttpOnly, o configuradas como SameSite=None de forma vulnerable.
+```java
+if (!requestResponse.hasResponse()) return false;
+var res = requestResponse.response();
+if (!res.hasHeader("Set-Cookie")) return false;
+
+for (var cookie : res.headerValues("Set-Cookie")) {
+    var c = cookie.toLowerCase();
+    if (!c.contains("httponly") || !c.contains("secure") || (c.contains("samesite=none") && !c.contains("secure"))) {
+        return true;
+    }
+}
+return false;
+
+```
+#### 10. Fuga de Sesiones / JWT en la URL (Query String)
+ * **Pruebas:** *Testing for Exposed Session Variables / Passing JWT on URL*
+ * **Captura:** Tokens de autorización atrapados en los logs del navegador y proxies intermedios por viajar en el GET.
+```java
+var query = requestResponse.request().query().toLowerCase();
+return query.contains("token=") || query.contains("sess=") || 
+       query.contains("jwt=") || query.contains("auth=") || 
+       query.contains("eyjh"); // 'eyJh' es '{"alg' en Base64
+
+```
+### FASE IV: AUTORIZACIÓN Y LÓGICA (WSTG-AUTHZ / INPV)
+#### 11. Escáner Pasivo de Candidatos a IDOR (Broken Object Level Auth)
+ * **Pruebas:** *Testing for Insecure Direct Object References / API1 BOLA*
+ * **Captura:** Peticiones exitosas (200 OK) que dependen de un número entero secuencial en la URL o en un parámetro.
+```java
+if (!requestResponse.hasResponse() || requestResponse.response().statusCode() != 200) return false;
+var req = requestResponse.request();
+
+if (req.path().matches(".*\\/[0-9]{1,8}(\\/|\\?|$)")) return true;
+
+for (var p : req.parameters()) {
+    if (p.type() == burp.api.montoya.http.message.params.HttpParameterType.URL) {
+        var n = p.name().toLowerCase();
+        if ((n.contains("id") || n.contains("user") || n.contains("account") || n.contains("doc")) && 
+            p.value().matches("^[0-9]{1,10}$")) return true;
+    }
+}
+return false;
+
+```
+#### 12. Detección de Polución de Parámetros (HPP)
+ * **Pruebas:** *Testing for HTTP Parameter Pollution*
+ * **Captura:** Peticiones que envían exactamente el mismo nombre de parámetro múltiples veces para confundir al WAF o al backend.
+```java
+var params = requestResponse.request().parameters();
+var names = new java.util.HashSet<String>();
+
+for (var p : params) {
+    if (p.type() == burp.api.montoya.http.message.params.HttpParameterType.URL || 
+        p.type() == burp.api.montoya.http.message.params.HttpParameterType.BODY) {
+        if (!names.add(p.name())) return true; 
+    }
+}
+return false;
+
+```
+#### 13. Caza de Open Redirects y SSRF Pasivo
+ * **Pruebas:** *Testing for Client-side URL Redirect / SSRF*
+ * **Captura:** Parámetros cuyo valor es una URL externa lista para ser manipulada.
+```java
+for (var p : requestResponse.request().parameters()) {
+    var n = p.name().toLowerCase();
+    var v = p.value().toLowerCase();
+    if ((n.contains("url") || n.contains("redirect") || n.contains("next") || 
+         n.contains("uri") || n.contains("dest") || n.contains("return")) && 
+        (v.startsWith("http://") || v.startsWith("https://") || v.startsWith("//"))) {
+        return true;
+    }
+}
+return false;
+
+```
+### FASE V: ERRORES E INYECCIONES (WSTG-ERRH / INPV)
+#### 14. Catch-All de Errores de Base de Datos, XML y Stack Traces
+ * **Pruebas:** *Improper Error Handling / Stack Traces / SQLi / XXE*
+ * **Captura:** Cualquier volcado de memoria de Java, errores de sintaxis SQL, fallos de parseo de Entidades Externas o drivers ODBC.
+```java
+if (!requestResponse.hasResponse()) return false;
+var res = requestResponse.response();
+
+if (res.statusCode() >= 400 || res.statusCode() == 200) {
+    var body = res.bodyToString().toLowerCase();
+    return body.contains("sql syntax") || body.contains("odbc driver") || 
+           body.contains("stack trace:") || body.contains("java.lang.") || 
+           body.contains("unhandled exception") || body.contains("microsoft oledb") || 
+           body.contains("simplexml_load_") || body.contains("xml pars");
+}
+return false;
+
+```
+### FASE VI: CLIENT-SIDE Y NAVEGADOR (WSTG-CLIENT)
+#### 15. Filtrado de Source Maps Expuestos (Caja Blanca Involuntaria)
+ * **Pruebas:** *Testing for application (debug) logs info leakage / JavaScript Execution*
+ * **Captura:** Archivos de mapeo que te permiten reconstruir el código TypeScript/React original sin ofuscar.
+```java
+if (!requestResponse.hasResponse() || requestResponse.response().statusCode() != 200) return false;
+return requestResponse.request().path().toLowerCase().endsWith(".js.map");
+
+```
+#### 16. Auditoría de CORS Permisivo
+ * **Pruebas:** *Testing Cross Origin Resource Sharing / API7 CORS*
+ * **Captura:** Cabeceras que permiten a cualquier atacante robar datos autenticados vía XHR.
+```java
+if (!requestResponse.hasResponse()) return false;
+var res = requestResponse.response();
+
+if (res.hasHeader("Access-Control-Allow-Origin")) {
+    var val = res.headerValue("Access-Control-Allow-Origin").trim();
+    return val.equals("*") || val.equals("null") || val.equalsIgnoreCase(requestResponse.request().headerValue("Origin"));
+}
+return false;
+
+```
+#### 17. Interceptación de Peticiones de Upgrade a WebSockets
+ * **Pruebas:** *Testing WebSockets*
+ * **Captura:** El handshake inicial para conmutar de HTTP a tráfico bidireccional.
+```java
+var req = requestResponse.request();
+return req.hasHeader("Upgrade") && req.headerValue("Upgrade").equalsIgnoreCase("websocket");
+
+```
+### FASE VII: API SECURITY & GRAPHQL (APISTG / GRAPHQL)
+#### 18. Detección de Fugas de Información PII y Secretos
+ * **Pruebas:** *PII Exposure / Clear text sensitive data / Leaking Tokens*
+ * **Captura:** Tarjetas de crédito, claves privadas, o Access Keys de AWS escupidas en el JSON de respuesta.
+```java
+if (!requestResponse.hasResponse() || requestResponse.response().statusCode() != 200) return false;
+var body = requestResponse.response().bodyToString();
+
+return body.contains("-----BEGIN") || body.contains("AKIA") || 
+       body.matches(".*4[0-9]{12}(?:[0-9]{3})?.*"); // Visa Regex simple
+
+```
+#### 19. Tráfico de Mutación en APIs (Candidatos a Mass Assignment)
+ * **Pruebas:** *API6 Mass Assignment*
+ * **Captura:** Endpoints REST que aceptan modificaciones de objetos vía JSON.
+```java
+var req = requestResponse.request();
+var m = req.method().toUpperCase();
+boolean isJson = req.hasHeader("Content-Type") && req.headerValue("Content-Type").toLowerCase().contains("json");
+
+return (m.equals("POST") || m.equals("PUT") || m.equals("PATCH")) && isJson;
+
+```
+#### 20. Auditoría Total de Autenticación JWT
+ * **Pruebas:** *API2 Broken User Auth (JWT)*
+ * **Captura:** Peticiones que dependan de JSON Web Tokens.
+```java
+var req = requestResponse.request();
+boolean authHeader = req.hasHeader("Authorization") && req.headerValue("Authorization").toLowerCase().contains("bearer ey");
+boolean inBodyOrUrl = req.bodyToString().toLowerCase().contains("eyjh") || req.query().toLowerCase().contains("eyjh");
+
+return authHeader || inBodyOrUrl;
+
+```
+#### 21. Descubrimiento de Versiones de API Rezagadas
+ * **Pruebas:** *API9 Improper Asset Management (Version Disclosure)*
+ * **Captura:** Tráfico apuntando a ramas de desarrollo o versiones antiguas mantenidas por compatibilidad.
+```java
+var path = requestResponse.request().path().toLowerCase();
+return path.contains("/v1/") || path.contains("/v2/") || path.contains("/beta/") || path.contains("/staging/");
+
+```
+#### 22. Ausencia de Cabeceras de Seguridad en Endpoints JSON
+ * **Pruebas:** *API7 Security Misconfiguration (Security Headers)*
+ * **Captura:** APIs vulnerables a Content-Type Sniffing o retención de caché de datos sensibles.
+```java
+if (!requestResponse.hasResponse()) return false;
+var res = requestResponse.response();
+boolean isJson = res.hasHeader("Content-Type") && res.headerValue("Content-Type").toLowerCase().contains("json");
+
+return isJson && (!res.hasHeader("X-Content-Type-Options") || !res.hasHeader("Cache-Control"));
+
+```
+#### 23. Introspección y Consultas de GraphQL
+ * **Pruebas:** *GraphQL (Query / Enumeration / Leaked GraphQL)*
+ * **Captura:** Endpoints de grafos y queries puras.
+```java
+var req = requestResponse.request();
+return req.path().toLowerCase().contains("/graphql") || 
+       req.bodyToString().contains("query {") || 
+       req.bodyToString().contains("mutation {");
+
+```
+
+
