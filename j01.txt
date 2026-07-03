@@ -1,0 +1,46 @@
+Configurar Chrome Remote Desktop en Kali Linux es una excelente opción para acceder a tu entorno de pruebas de forma remota. Dado que Kali está basado en Debian y utiliza XFCE como entorno de escritorio predeterminado, el proceso es bastante directo, pero requiere un par de trucos de configuración para evitar la famosa "pantalla negra".
+> ⚠️ Nota importante de seguridad: Chrome Remote Desktop no se lleva bien con el usuario root por motivos de seguridad de Chromium. Asegúrate de hacer todo este proceso desde un usuario normal (como el usuario por defecto kali).
+> 
+Guía Paso a Paso
+Paso 1: Actualizar el sistema
+Antes de instalar cualquier paquete, abre tu terminal y asegúrate de tener los repositorios al día:
+sudo apt update && sudo apt upgrade -y
+
+Paso 2: Instalar Google Chrome
+Chrome Remote Desktop requiere que el navegador base esté instalado en el sistema. Si ya lo tienes, puedes saltar al Paso 3.
+wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+sudo apt install ./google-chrome-stable_current_amd64.deb -y
+
+Paso 3: Descargar e instalar Chrome Remote Desktop
+Descarga el paquete oficial .deb del host de escritorio remoto e instálalo:
+wget https://dl.google.com/linux/direct/chrome-remote-desktop_current_amd64.deb
+sudo apt install ./chrome-remote-desktop_current_amd64.deb -y
+
+Si la terminal te arroja algún error de dependencias, soluciónalo rápidamente corriendo: sudo apt --fix-broken install
+Paso 4: Añadir tu usuario al grupo correcto
+Para que el servicio pueda ejecutarse bajo tu cuenta sin pedir permisos de administrador constantemente, añade tu usuario al grupo de Chrome Remote Desktop:
+sudo usermod -aG chrome-remote-desktop $USER
+
+Paso 5: Configurar el entorno de escritorio (Evita la pantalla negra)
+Chrome Remote Desktop necesita saber exactamente qué interfaz gráfica debe iniciar cuando te conectes. Como Kali usa XFCE, crea un archivo de configuración en tu directorio personal con este comando:
+echo "exec /usr/bin/xfce4-session" > ~/.chrome-remote-desktop-session
+
+Paso 6: Generar el código de vinculación de Google
+Ahora necesitas autorizar a tu máquina Kali para que se conecte a los servidores de Google:
+ * Desde otra computadora (o desde el propio Chrome en Kali), abre el navegador e ingresa a: remotedesktop.google.com/headless.
+ * Inicia sesión con tu cuenta de Google.
+ * Haz clic en Configurar otra computadora y avanza hasta que te muestre un comando largo para Debian Linux.
+ * Haz clic en el botón de Copiar (copiará un comando que empieza con DISPLAY= /opt/google/chrome-remote-desktop/start-host...).
+ * Pega ese comando en la terminal de tu Kali Linux y presiona Enter.
+ * El sistema te pedirá que crees un PIN de 6 dígitos. Elígelo bien y confírmalo (no verás los números mientras los escribes por seguridad).
+Paso 7: Iniciar el servicio
+Para asegurar que todo empiece a correr con la nueva configuración, reinicia el servicio del escritorio remoto:
+sudo systemctl restart chrome-remote-desktop@$USER
+
+¿Cómo conectarte ahora?
+¡Listo! Tu Kali Linux ya está en la nube de Google.
+ * Ve a remotedesktop.google.com/access desde cualquier dispositivo (PC, Mac, Android o iOS).
+ * Verás el nombre de tu máquina Kali en la lista de dispositivos "En línea".
+ * Haz clic en ella, introduce el PIN de 6 dígitos que creaste en el Paso 6 y ¡estarás dentro!
+> 💡 Tip Pro: Si al conectarte de forma remota ves una pantalla negra o se congela, suele ser porque tienes la sesión gráfica abierta físicamente en la máquina Kali al mismo tiempo. Prueba cerrar sesión (Log out) en tu máquina física y luego intenta conectarte desde el dispositivo remoto.
+> 
