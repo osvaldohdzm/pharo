@@ -1,3 +1,36 @@
+¡Gran decisión! RustDesk es una alternativa excelente a Chrome Remote Desktop y TeamViewer: es de código abierto, infinitamente más rápida de configurar en Linux y no suele dar los dolores de cabeza de las pantallas negras.
+Como Kali Linux está basado en Debian, la instalación es sumamente sencilla usando el paquete oficial .deb. Aquí tienes el paso a paso:
+Guía de Instalación de RustDesk en Kali Linux
+Paso 1: Actualizar el sistema
+Como buena práctica en Kali, abre una terminal y actualiza la lista de paquetes para evitar conflictos de dependencias:
+sudo apt update
+
+Paso 2: Descargar el paquete oficial .deb
+Puedes descargar la versión para sistemas de 64 bits (AMD64/x86_64) directamente desde el GitHub oficial con este comando wget:
+wget https://github.com/rustdesk/rustdesk/releases/download/1.4.8/rustdesk-1.4.8-x86_64.deb
+
+(Nota: Si al ejecutarlo ves que salió una versión más reciente, puedes descargarla directamente desde su página oficial de descargas).
+Paso 3: Instalar el paquete con APT
+Para asegurarnos de que el sistema instale automáticamente cualquier librería o dependencia que le haga falta, utiliza apt install apuntando al archivo que acabas de descargar:
+sudo apt install ./rustdesk-1.4.8-x86_64.deb -y
+
+> 💡 ¿Por qué apt en lugar de dpkg? Si usas dpkg -i, es muy probable que te dé errores de dependencias rotas. Usar apt install ./nombre_archivo.deb resuelve y descarga todo lo que falte automáticamente.
+> 
+Paso 4: ¡Listo! Abrir RustDesk
+Una vez que termine la instalación, ya puedes buscar RustDesk en el menú de aplicaciones de tu Kali Linux (bajo la categoría de herramientas normales o simplemente escribiendo su nombre), o bien lanzarlo directamente desde la terminal corriendo:
+rustdesk &
+
+Al abrirlo, verás inmediatamente tu ID y una Contraseña aleatoria en el panel izquierdo. Ya puedes usar esos datos para conectarte a tu Kali desde cualquier otro dispositivo con RustDesk instalado.
+🛠️ Un par de tips para Kali Linux:
+ * ¿Estás usando el usuario root? A diferencia de Chrome Remote Desktop, RustDesk suele abrirse sin problemas bajo root. Sin embargo, si por alguna razón no arranca la interfaz gráfica, asegúrate de correrlo desde tu usuario normal (kali).
+ * Inicio automático: Si quieres que RustDesk se inicie solo cada vez que enciendas tu máquina Kali (ideal si la tienes en un servidor o máquina virtual sin monitor), el propio instalador ya configura el servicio de fondo. Puedes verificar que esté corriendo con:
+   sudo systemctl status rustdesk
+
+
+
+
+ggggg
+
 
 DISPLAY= /opt/google/chrome-remote-desktop/start-host --code="4/0AdkVLPxhHPagx5AWkZHGNZBTSF7HEgBCTUudsAdxzX2AeO5qfYKp4enO6vgfKlxSHTZabw" --redirect-url="https://remotedesktop.google.com/_/oauthredirect" --name=$(hostname)
 
