@@ -1,3 +1,7 @@
+DISPLAY= /opt/google/chrome-remote-desktop/start-host --code="4/0AdkVLPxz6mml1_aTOrZnl1coeC7ssIf6uMNh1DvQyuuj6p75ze0TDmifQ5YqH-FdDu0b2g" --redirect-url="https://remotedesktop.google.com/_/oauthredirect" --name=$(hostname)
+
+
+
 Configurar Chrome Remote Desktop en Kali Linux es una excelente opción para acceder a tu entorno de pruebas de forma remota. Dado que Kali está basado en Debian y utiliza XFCE como entorno de escritorio predeterminado, el proceso es bastante directo, pero requiere un par de trucos de configuración para evitar la famosa "pantalla negra".
 > ⚠️ Nota importante de seguridad: Chrome Remote Desktop no se lleva bien con el usuario root por motivos de seguridad de Chromium. Asegúrate de hacer todo este proceso desde un usuario normal (como el usuario por defecto kali).
 > 
