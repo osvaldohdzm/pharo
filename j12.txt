@@ -1,0 +1,143 @@
+# CYBERSECURITY ASSESSMENT REPORT: TECHNICAL DEFECT DOCUMENTATION
+**Asset Tracking ID:** C152739
+**Assessment Date:** July 10, 2026
+**Classification:** RESTRICTED
+**Target Host System:** 164.6.40.190 / 164.6.40.191 (Unix Platform / Apache Tomcat & IBM App Connect Enterprise)
+**Target Security Domain:** OAT MX HSBC Testing Environment Context
+## EXECUTIVE DEFECT SUMMARY
+The cybersecurity assessment conducted against the designated target environment identified five distinct configuration and logical infrastructure defects. Testing revealed that multiple web-based payment processing modules expose structural directories and input forms over unencrypted plaintext channels without requiring server-side authentication.
+Furthermore, infrastructure transport layer settings natively permit unauthenticated anonymous cryptographic connections and non-compliant password-based interactive handshakes. Exploitation could not be confirmed during the assessment, and testing actions were strictly limited to the provided non-production verification boundaries.
+## TECHNICAL ASSESSMENT BRIEF: SERVICE HARDENING ANALYSIS
+During the assessment of the administrative boundary on port 22/tcp, the host infrastructure was verified to run OpenSSH 8.0. A localized architectural review was conducted regarding the high-profile **RegreSSHion vulnerability (CVE-2024-6387)**.
+Factual parsing confirms that the version deployed (**OpenSSH 8.0**) is **not vulnerable** to this specific remote exploitation vector. The RegreSSHion flaw stems from a programmatic code regression reintroduced in version 8.5p1 and subsequently resolved in 9.8p1.
+While the node safely avoids this critical memory-corruption threat, port 22/tcp remains non-compliant with corporate infrastructure security parameters due to the active acceptance of standard password validation paths.
+## GENERAL FINDING 1: MISSING SERVER-SIDE AUTHENTICATION ON PAYMENT FORMS
+### PTLab Global Registry Metadata
+ * **PTLab Finding Title:** Missing Server-Side Authentication on Transaction Ingestion Components
+ * **HSBC Issue Category:** Authentication
+ * **HSBC Issues Sub-Category:** Broken authentication
+ * **Risk Rating:** **HIGH**
+ * **Risk Relevance:** Release Finding / Application Logic Defect
+ * **Target Directory / Context:** /web/spei3 and /web/iat
+ * **CVSS 4.0 Vector:** CVSS:4.0/AV:A/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:N/SC:N/SI:N/SA:N
+### Technical Description
+The web user interface container handling transaction inputs operates entirely without identity verification controls. Unauthenticated client requests can load payment execution forms and supply parameter inputs into backend fields such as Cantidad, Consecutivo, and related reference lines. The backend code attempts to ingest data straight from incoming browser connections without matching parameters against an active session database or cryptographically signed token repository.
+### Verification Methodology
+ 1. Establish a direct network connection over port 8090/tcp to host 164.6.40.191 without providing user credentials or active tokens.
+ 2. Navigate to the form endpoints [http://164.6.40.191:8090/web/spei3](http://164.6.40.191:8090/web/spei3) or [http://164.6.40.191:8090/web/iat](http://164.6.40.191:8090/web/iat).
+ 3. Observe that the server processes the request, bypassing authentication checks, and renders the presentation input boxes.
+ 4. Input test alphanumeric data into the active fields and trigger submission. The container accepts the values and attempts integration with backend systems, returning an explicit queuing validation fault code: MQJE001: Completion Code '2', Reason '2058'.
+### Business & Technical Impact Analysis
+ * **Validated Impact:** Anonymous network entries can interact with transactional testing forms and manually submit values, forcing transaction execution exceptions on localized backend message queues.
+ * **Potential Impact:** If identical unauthenticated execution paths exist within a live production context, an unauthorized party could manipulate payment parameters, alter payroll variables, or flood message handlers to disrupt downstream accounting queues.
+ * **Assessment Limitations:** Integration with active production financial systems could not be evaluated within this testing scope.
+### Audit-Compliant Remediation Strategy
+ * **Structural Hardening:** Implement a centralized server-side authentication validation loop at the container layer. Every inbound request directed to transaction paths must confirm the presence and cryptographic signature validity of an enterprise token before executing application logic.
+ * **Access Controls:** Enforce a default-deny boundary rule on the /web/* directory context, automatically dropping anonymous interactions or redirecting them to an enterprise identity provider.
+## GENERAL FINDING 2: UNAUTHENTICATED DIRECTORY INDEXING ENABLED
+### PTLab Global Registry Metadata
+ * **PTLab Finding Title:** Web Application Directory Structure Disclosure via Directory Indexing Configuration
+ * **HSBC Issue Category:** Information Disclosure
+ * **HSBC Issues Sub-Category:** Directory listing is enabled
+ * **Risk Rating:** **MEDIUM**
+ * **Risk Relevance:** Release Finding / Configuration Defect
+ * **Target Directory / Context:** [http://164.6.40.191:8090/web/](http://164.6.40.191:8090/web/)
+ * **CVSS 4.0 Vector:** CVSS:4.0/AV:A/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:N/SC:N/SI:N/SA:N
+### Technical Description
+The web application server deployment descriptor properties do not restrict directory indexing. When an incoming connection targets a folder directory path trailing a slash instead of an explicit servlet endpoint or single file resource, the system dynamically maps and prints a complete index listing of all assets contained inside that directory.
+### Verification Methodology
+ 1. Transmit an unauthenticated HTTP GET request targeting the root path at [http://164.6.40.191:8090/web/](http://164.6.40.191:8090/web/).
+ 2. Observe an HTTP 200 OK response code accompanied by a generated web tree list.
+ 3. Analyze the resulting index mapping to verify the unauthenticated disclosure of the following folders: SPEI, SPEI2, SPEI3, SPID, SPID2, IAT, IAT2, PayRoll, and OPI.
+### Business & Technical Impact Analysis
+ * **Validated Impact:** The structural folder mapping, naming nomenclature, and layout schema of hidden transaction portals are fully visible to unauthorized network devices.
+ * **Potential Impact:** This exposure simplifies attacker reconnaissance loops, allowing unauthorized parties to systematically catalogue hidden application directories and target adjacent unauthenticated input forms.
+ * **Assessment Limitations:** No verification was performed regarding the presence of adjacent unmapped backup folders inside the parent container.
+### Audit-Compliant Remediation Strategy
+ * **Structural Hardening:** Modify the global server deployment descriptor properties file and configure the file-indexing parameters explicitly to **false** to ensure directory indexing is completely disabled.
+ * **Access Controls:** Restrict container routing definitions to ensure that empty directory queries automatically redirect to a designated login interface or display a neutral index placeholder.
+## GENERAL FINDING 3: SENSITIVE TRAFFIC TRANSMITTED OVER PLAINTEXT HTTP
+### PTLab Global Registry Metadata
+ * **PTLab Finding Title:** Sensitive Financial Transaction Data Ingestion via Cleartext HTTP
+ * **HSBC Issue Category:** Sensitive Data Protection
+ * **HSBC Issues Sub-Category:** SSL/TLS not used in transit
+ * **Risk Rating:** **HIGH**
+ * **Risk Relevance:** Release Finding / Transport Layer Defect
+ * **Target Directory / Context:** Port 8090/tcp
+ * **CVSS 4.0 Vector:** CVSS:4.0/AV:A/AC:H/AT:N/PR:N/UI:N/VC:H/VI:H/VA:N/SC:N/SI:N/SA:N
+### Technical Description
+The web service deployment on port 8090/tcp operates over unencrypted plaintext HTTP parameters. The implementation lacks automated enforcement rules for transport-layer security and does not issue redirection directives to enforce encryption across transaction connection channels.
+### Verification Methodology
+ 1. Query the service listening behavior on port 8090/tcp.
+ 2. Observe that the web container natively responds to unencrypted http:// connection parameters.
+ 3. Verify that entering data into the input forms transmits all fields across network routing segments in plaintext format.
+### Business & Technical Impact Analysis
+ * **Validated Impact:** Application parameters and payment form values travel over network segments in an unencrypted state.
+ * **Potential Impact:** An entity positioned on an adjacent network path could leverage packet-capture capabilities to read transaction variables, system keys, and raw payroll details in plain text.
+ * **Assessment Limitations:** Active traffic capture via a physical network TAP was not performed due to environment access restrictions.
+### Audit-Compliant Remediation Strategy
+ * **Structural Hardening:** Bind the target web application interface strictly to an encrypted HTTPS transport architecture. Configure the listener to utilize secure corporate profiles such as TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 on TLS 1.2 or modern TLS 1.3 combinations, dropping cleartext HTTP requests at the boundary layer.
+## GENERAL FINDING 4: ANONYMOUS SSL/TLS CIPHER SUITES ACCEPTED
+### PTLab Global Registry Metadata
+ * **PTLab Finding Title:** Transport Layer Security Authentication Bypass: Anonymous Key Exchange
+ * **HSBC Issue Category:** Cryptography
+ * **HSBC Issues Sub-Category:** SSL / TLS Vulnerabilities
+ * **Risk Rating:** **MEDIUM**
+ * **Risk Relevance:** Release Finding / System Hardening Defect
+ * **Target Directory / Context:** 164.6.40.191:7083/tcp
+ * **CVSS 4.0 Vector:** CVSS:4.0/AV:A/AC:H/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N
+### Technical Description
+The transport security configuration running on port 7083/tcp (IBM App Connect Enterprise) permits the negotiation of anonymous Diffie-Hellman cipher suites (TLS_ECDH_anon_*). This behavior allows encryption channels to establish without requiring the server host to present a cryptographically verified public-key certificate to the connecting client.
+### Verification Methodology
+ 1. Initialize a connection negotiation probe targeting port 7083.
+ 2. Submit handshakes explicitly offering anonymous key exchange parameters.
+ 3. Observe that the server successfully completes session negotiation instead of dropping the untrusted connection.
+ 4. Confirm active support for TLS_ECDH_anon_WITH_AES_128_CBC_SHA and TLS_ECDH_anon_WITH_AES_256_CBC_SHA.
+### Business & Technical Impact Analysis
+ * **Validated Impact:** The server negotiates encrypted links that omit server identity validation checks during the session handshake on port 7083/tcp.
+ * **Potential Impact:** In a specialized adjacent network position (such as a local man-in-the-middle vector), the lack of identity verification could let an unauthenticated node intercept traffic without triggering typical certificate warnings on client architectures.
+ * **Assessment Limitations:** Live traffic interception or payload decryption was not demonstrated.
+### Audit-Compliant Remediation Strategy
+ * **Structural Hardening:** Modify the cryptographic engine properties within the IBM App Connect Enterprise environment to explicitly exclude anon string profiles. Mandate authenticated certificate exchanges exclusively using TLS 1.2 or TLS 1.3 parameters.
+## GENERAL FINDING 5: NON-COMPLIANT SSH PASSWORD AUTHENTICATION SCHEME
+### PTLab Global Registry Metadata
+ * **PTLab Finding Title:** Prohibited Password-Based Authentication Schemes Enabled on Enterprise SSH Services
+ * **HSBC Issue Category:** Authentication
+ * **HSBC Issues Sub-Category:** Non-Compliant Authentication Scheme
+ * **Risk Rating:** **HIGH**
+ * **Risk Relevance:** Release Finding / System Baseline Non-Compliance
+ * **Target Directory / Context:** Port 22/tcp (164.6.40.190 / 164.6.40.191)
+ * **CVSS 4.0 Vector:** CVSS:4.0/AV:A/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N
+### Technical Description
+The OpenSSH server profiles are configured to process standard password-based and keyboard-interactive authentication queries. This setup breaks the bank's strict operational guidelines, which require administrative access to infrastructure nodes to be validated exclusively via strong public-key authentication.
+### Verification Methodology
+ 1. Perform an authentication enumeration handshake check against the target SSH endpoints on port 22.
+ 2. Observe the server response banner identifying supported login verification mechanisms.
+ 3. Verify that the server explicitly responds to and accepts standard password and keyboard-interactive verification parameters.
+### Business & Technical Impact Analysis
+ * **Validated Impact:** The infrastructure nodes accept password-based authentication parameters on port 22/tcp.
+ * **Potential Impact:** The presence of password authentication exposes administrative components to brute-force or credential-guessing attempts, bypassing intended key-based access control perimeters.
+ * **Assessment Limitations:** Active credential brute-forcing was not executed to avoid account lockout conditions.
+### Audit-Compliant Remediation Strategy
+ * **Structural Hardening:** Edit the /etc/ssh/sshd_config file on the target server nodes and enforce the required key-based authentication baseline parameters:
+   * PasswordAuthentication no
+   * KbdInteractiveAuthentication no
+## 📸 TECHNICAL EVIDENCE & VERBATIM PROOF MATRIX
+### Evidence 1: Financial Form and Directory Indexing Exposure
+> Artifact Filename: VIRTUAL_DATA-6_4.txt
+> 
+ * **Audit Analysis:** The text log demonstrates the omission of path authorization controls on port 8090 and records the direct queue error exception thrown upon anonymous form submission.
+ * **Key Indicator:** The file records the literal path lines: directory listing en [http://164.6.40.191:8090/web/](http://164.6.40.191:8090/web/) listing items like SPEI3, PayRoll, and OPI, alongside the string MQJE001: Completion Code '2', Reason '2058'.
+ * **Technical Conclusion:** The results prove that authorization filters are absent on the target testing forms. They do not indicate a breach of production asset segments or live user data repositories.
+### Evidence 2: Non-Compliant Service Authentication Handshake
+> Artifact Filename: VIRTUAL_DATA-6_4.txt
+> 
+ * **Audit Analysis:** This artifact captures the SSH handshake response, mapping out the permitted verification methods allowed by the host operating system profile.
+ * **Key Indicator:** The log output explicitly enumerates: Supported authentication methods: publickey, password, keyboard-interactive.
+ * **Technical Conclusion:** The file confirms that standard password prompts are accepted by the system configuration. It does not imply that administrative control has been compromised.
+## RETEST VERIFICATION ASSURANCE FRAMEWORK
+ * [ ] Unauthenticated network queries to the /web/ directory and its sub-paths return a strict 401 Unauthorized or 403 Forbidden status code without rendering the page contents.
+ * [ ] All incoming HTTP connections over port 8090 are completely dropped or migrated to a secure, encrypted HTTPS tunnel.
+ * [ ] Handshake attempts to port 7083 containing anonymous key exchange suites (anon) fail immediately during the negotiation phase.
+ * [ ] Connection handshakes to port 22 utilizing password metrics are rejected natively by the SSH server configurations, allowing only public-key validation.
+ * [ ] No evidence of operational regression was observed on any modified infrastructure service.
