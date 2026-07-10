@@ -1,0 +1,148 @@
+Para consolidar tu arquitectura de escaneo como un *pentester* de nivel avanzado, lo ideal es estructurar tu flujo de trabajo en **dos componentes modulares e independientes**: un **Extractor Universal** (que busque cualquier patrón como ssl, http o ssh) y un **Lanzador Dinámico** (donde tú elijas exactamente qué scripts ejecutar según la fase de tu examen).
+El gran secreto técnico en tus reportes para extraer puertos SSL ocultos es buscar la cadena **%T=SSL%** dentro de las firmas crudas de Nmap. Cuando Nmap detecta un servicio desconocido pero montado sobre una capa segura, inyecta ese tag explícito en el *Service Fingerprint* (como ocurrió con el puerto 7083 de la IP 164.6.40.191).
+Aquí tienes el arsenal de scripts nativos en Bash corregidos y optimizados para automatizar tu examen sin instalar nada extra.
+## Componente 1: El Extractor Universal (extract_services.sh)
+Este script mantiene la detección automática de tu archivo .nmap. Ahora incluye una variable al inicio (TARGET_SERVICE) que puedes cambiar de ssl a ssh o http según lo que quieras extraer en cada fase del examen.
+```bash
+cat << 'EOF' > extract_services.sh
+#!/bin/bash
+
+# ==========================================
+# CONFIGURACIÓN DE OBJETIVO (MODIFICALO AQUÍ)
+# ==========================================
+TARGET_SERVICE="ssl"  # Puedes cambiarlo a "ssh", "http", "ftp", etc.
+
+# 1. Buscar dinámicamente el archivo de Nmap
+files=(nmap_service_version*.nmap)
+
+if [ ! -e "${files[0]}" ]; then
+    echo "[-] Error: No se encontró ningún archivo 'nmap_service_version*.nmap' en este directorio."
+    exit 1
+fi
+
+FILE="${files[0]}"
+OUT="${TARGET_SERVICE}_resume.out"
+
+echo "[+] Archivo detectado: $FILE"
+echo "[+] Extrayendo puertos asociados a: '$TARGET_SERVICE'..."
+
+> "$OUT"
+current_ip=""
+declare -A ip_ports
+
+# 2. Procesar el reporte línea por línea
+while IFS= read -r line || [ -n "$line" ]; do
+    # Capturar la IP del Host
+    if [[ "$line" =~ Nmap\ scan\ report\ for\ ([0-9.]+) ]]; then
+        current_ip="${BASH_REMATCH[1]}"
+        ip_ports["$current_ip"]=""
+    fi
+
+    [ -z "$current_ip" ] && continue
+
+    # Caso A: Puertos de la tabla estándar que contienen el término
+    if [[ "$line" =~ ^([0-9]+)/tcp[[:space:]]+open ]]; then
+        port="${BASH_REMATCH[1]}"
+        lower_line=$(echo "$line" | tr '[:upper:]' '[:lower:]')
+        if [[ "$lower_line" =~ "$TARGET_SERVICE" ]]; then
+            ip_ports["$current_ip"]="${ip_ports["$current_ip"]} $port"
+        fi
+    fi
+
+    # Caso B: Capturar el puerto actual si entramos en un Service Fingerprint
+    if [[ "$line" =~ SF-Port([0-9]+)-TCP ]]; then
+        fp_port="${BASH_REMATCH[1]}"
+    fi
+
+    # Caso C: Buscar indicadores de SSL (%T=SSL%) o HTTP en las líneas del Fingerprint
+    if [[ "$line" =~ ^SF: && -n "$fp_port" ]]; then
+        # Si buscamos SSL, rastrear el tag nativo de Nmap %T=SSL%
+        if [ "$TARGET_SERVICE" == "ssl" ] && [[ "$line" =~ "%T=SSL%" ]]; then
+            ip_ports["$current_ip"]="${ip_ports["$current_ip"]} $fp_port"
+        # Si buscamos HTTP o cualquier otra palabra clave en la huella cruda
+        elif [ "$TARGET_SERVICE" != "ssl" ] && [[ "$(echo "$line" | tr '[:upper:]' '[:lower:]')" =~ "$TARGET_SERVICE" ]]; then
+            ip_ports["$current_ip"]="${ip_ports["$current_ip"]} $fp_port"
+        fi
+    fi
+done < "$FILE"
+
+# 3. Formatear y exportar resultados ordenados sin duplicados
+for ip in "${!ip_ports[@]}"; do
+    ports=$(echo "${ip_ports[$ip]}" | tr ' ' '\n' | grep -v '^$' | sort -nu | tr '\n' ',' | sed 's/,$//')
+    if [ -n "$ports" ]; then
+        echo "${TARGET_SERVICE}-${ip}:${ports}" >> "$OUT"
+        echo "   -> ${TARGET_SERVICE}-${ip}:${ports}"
+    fi
+done
+
+echo -e "\n[+] Archivo de salida '$OUT' generado con éxito."
+EOF
+
+chmod +x extract_services.sh && ./extract_services.sh
+
+```
+## Componente 2: El Lanzador Dinámico Mutante (run_custom_scripts.sh)
+Una vez generado tu archivo (por ejemplo, ssl_resume.out), utilizas este segundo script independiente. He corregido tus condicionales internos e implementado variables limpias al inicio para que elijas el archivo de entrada y pegues exactamente la lista de scripts NSE que consideres óptima en tu auditoría.
+```bash
+cat << 'EOF' > run_custom_scripts.sh
+#!/bin/bash
+set -euo pipefail
+
+# ==========================================
+# CONFIGURACIÓN DE COMANDO Y ENTRADA
+# ==========================================
+INPUT_FILE="ssl_resume.out"
+
+# Modifica este string con los scripts que desees lanzar en esta iteración
+SCRIPTS="ssl-ccs-injection,ssl-cert,ssl-date,ssl-dh-params,ssl-enum-ciphers,ssl-heartbleed,ssl-poodle,sslv2"
+
+if [ ! -f "$INPUT_FILE" ]; then
+    echo "[-] Error: No se encuentra el archivo de entrada '$INPUT_FILE'"
+    exit 1
+fi
+
+echo "[+] Leyendo objetivos desde: $INPUT_FILE"
+echo "[+] Scripts seleccionados: $SCRIPTS"
+echo "--------------------------------------------------"
+
+while IFS= read -r line || [ -n "$line" ]; do
+    [[ -z "$line" ]] && continue
+
+    # Sanitizar la entrada omitiendo el prefijo inicial (ej: ssl- o http-)
+    clean_line="${line#*-}"
+    
+    # Extraer IP y Puertos correspondientes
+    ip="${clean_line%%:*}"
+    ports="${clean_line#*:}"
+
+    # Validaciones de seguridad en los argumentos antes de ejecutar Nmap
+    [[ "$ports" =~ ^[0-9]+(,[0-9]+)*$ ]] || { echo "[-] Estructura de puertos inválida: $line" >&2; continue; }
+    [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "[-] Estructura de IP inválida: $line" >&2; continue; }
+
+    # Nombre único para el reporte basado en la IP auditada
+    OUTPUT_NAME="scan_vulnerabilidades_${ip}"
+
+    echo -e "\n[*] Atacando Host: $ip en Puertos: $ports"
+    
+    # Ejecución controlada con banner grabbing (-sV) mandatorio y almacenamiento completo (-oA)
+    nmap -sV -Pn -p "$ports" --script-timeout 45s --script="$SCRIPTS" -oA "$OUTPUT_NAME" "$ip"
+
+done < "$INPUT_FILE"
+EOF
+
+chmod +x run_custom_scripts.sh
+
+```
+## 📊 Resultados esperados tras la ejecución
+Al ejecutar ./extract_services.sh configurado en modo ssl con tu archivo de logs actual, la salida de tu archivo ssl_resume.out procesará los hosts de forma limpia y capturará el puerto problemático 7083 de manera totalmente automatizada:
+```text
+ssl-164.6.40.190:2738,11010,14000
+ssl-164.6.40.191:2738,7083,11010,14000
+
+```
+### 🎯 Cómo pivotar a otro servicio (Ejemplo: SSH)
+Si más adelante en tu examen quieres auditar los accesos SSH descubiertos:
+ 1. Abres extract_services.sh y cambias la línea 6 a: TARGET_SERVICE="ssh".
+ 2. Ejecutas el extractor: ./extract_services.sh (creará ssh_resume.out).
+ 3. Modificas run_custom_scripts.sh fijando INPUT_FILE="ssh_resume.out" y asignas en la variable SCRIPTS="ssh-auth-methods,ssh2-enum-algos".
+ 4. Ejecutas: ./run_custom_scripts.sh.
