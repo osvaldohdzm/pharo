@@ -1,0 +1,81 @@
+¡Pensado como un verdadero profesional de la automatización! En el mundo real del *pentesting*, los nombres de los reportes cambian constantemente según el cliente o el identificador del proyecto, por lo que depender de un nombre estático es una mala práctica.
+He modificado el script en Bash para que **busque de forma completamente automática** cualquier archivo en tu directorio actual que comience con nmap_service_version y tenga la extensión .nmap (tal como el formato que vimos en VIRTUAL_DATA-3.txt). Si encuentra más de uno, procesará el primero de la lista; y si no encuentra ninguno, te lo advertirá de forma clara para que no pierdas tiempo en tu examen.
+## 🛠️ El Script de Bash con Detección Automática
+Copia y pega este bloque en tu terminal. Se encargará de crear el script extract_http.sh y ejecutarlo de inmediato:
+```bash
+cat << 'EOF' > extract_http.sh
+#!/bin/bash
+
+# 1. Buscar dinámicamente archivos que empiecen con nmap_service_version y terminen en .nmap
+files=(nmap_service_version*.nmap)
+
+# Verificar si el patrón coincidió con algún archivo real
+if [ ! -e "${files[0]}" ]; then
+    echo "[-] Error: No se encontró ningún archivo que comience con 'nmap_service_version' y termine en '.nmap' en este directorio."
+    exit 1
+fi
+
+# Seleccionar el primer archivo que cumpla con el criterio
+FILE="${files[0]}"
+OUT="http_resume.out"
+
+echo "[+] Archivo detectado de forma automática: $FILE"
+echo "[+] Iniciando extracción de puertos web..."
+
+# Limpiar o crear el archivo de salida
+> "$OUT"
+
+current_ip=""
+declare -A ip_ports
+
+# 2. Procesar el archivo detectado
+while IFS= read -r line || [ -n "$line" ]; do
+    # Detectar cambio de IP del host
+    if [[ "$line" =~ Nmap\ scan\ report\ for\ ([0-9.]+) ]]; then
+        current_ip="${BASH_REMATCH[1]}"
+        ip_ports["$current_ip"]=""
+    fi
+
+    [ -z "$current_ip" ] && continue
+
+    # Capturar puertos abiertos estándar que sean HTTP
+    if [[ "$line" =~ ^([0-9]+)/tcp[[:space:]]+open ]]; then
+        port="${BASH_REMATCH[1]}"
+        lower_line=$(echo "$line" | tr '[:upper:]' '[:lower:]')
+        if [[ "$lower_line" =~ "http" ]]; then
+            ip_ports["$current_ip"]="${ip_ports["$current_ip"]} $port"
+        fi
+    fi
+
+    # Detectar puertos asociados a huellas de servicio (Fingerprints)
+    if [[ "$line" =~ SF-Port([0-9]+)-TCP ]]; then
+        fp_port="${BASH_REMATCH[1]}"
+    fi
+
+    # Si la línea pertenece a un fingerprint y contiene la palabra "HTTP"
+    if [[ "$line" =~ ^SF: && "$line" =~ "HTTP" && -n "$fp_port" ]]; then
+        ip_ports["$current_ip"]="${ip_ports["$current_ip"]} $fp_port"
+    fi
+done < "$FILE"
+
+# 3. Procesar, ordenar numéricamente y guardar en el archivo de salida
+for ip in "${!ip_ports[@]}"; do
+    # Limpiamos espacios, ordenamos numéricamente (-n) de forma única (-u) y unimos con comas
+    ports=$(echo "${ip_ports[$ip]}" | tr ' ' '\n' | grep -v '^$' | sort -nu | tr '\n' ',' | sed 's/,$//')
+    if [ -n "$ports" ]; then
+        echo "http-${ip}:${ports}" >> "$OUT"
+        echo "http-${ip}:${ports}"
+    fi
+done
+
+echo -e "\n[+] Archivo '$OUT' generado con éxito utilizando '$FILE' como fuente."
+EOF
+
+# Darle permisos de ejecución y correrlo de inmediato
+chmod +x extract_http.sh && ./extract_http.sh
+
+```
+## 🔍 ¿Cómo funciona la detección inteligente?
+ * **files=(nmap_service_version*.nmap)**: Esta línea crea una matriz (array) en Bash con todos los archivos que coincidan con la máscara en el directorio actual.
+ * **[ ! -e "${files[0]}" ]**: Comprueba si el primer elemento de la matriz existe realmente como un archivo físico. Si no hay archivos que coincidan, el motor de Bash deja el asterisco tal cual (nmap_service_version*.nmap), por lo que esta validación detecta que no es un archivo real y aborta de forma segura antes de lanzar errores extraños.
+ * **FILE="${files[0]}"**: Asigna de manera dinámica el archivo descubierto a la variable de procesamiento, garantizando que funcione de forma idéntica sin importar la cadena de texto intermedia (como fechas, códigos de proyecto o IDs del examen).
