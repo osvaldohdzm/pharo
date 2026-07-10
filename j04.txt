@@ -1,0 +1,82 @@
+¡Entendido! En pleno examen de certificación o auditoría real, a veces no tienes Python disponible, o las políticas de la máquina de salto te prohíben ejecutar scripts de terceros. Necesitas algo **nativo, rápido y directo** en la terminal.
+Analizando el archivo de reporte **VIRTUAL_DATA-3.txt**, he diseñado un script en **Bash puro** que utiliza únicamente herramientas que vienen preinstaladas por defecto en cualquier distribución de Linux (como grep, sed, awk y tr).
+Aquí tienes la solución definitiva para tu terminal.
+## 🛠️ El Script de Bash Puro (Sin Dependencias)
+Puedes copiar y pegar este bloque directamente en tu terminal. El script leerá el archivo .nmap que vimos en VIRTUAL_DATA-3.txt, extraerá los puertos web estándar y los ocultos en los fingerprints, eliminará duplicados, los ordenará numéricamente y los guardará con el formato exacto en http_resume.out.
+```bash
+cat << 'EOF' > extract_http.sh
+#!/bin/bash
+
+# Archivo de origen basado en VIRTUAL_DATA-3.txt
+FILE="nmap_service_version_eim_239125_hsbcnet_connect_mexico_comet_id152739.nmap"
+OUT="http_resume.out"
+
+if [ ! -f "$FILE" ]; then
+    echo "[-] Error: No se encuentra el archivo $FILE"
+    exit 1
+fi
+
+# Limpiar o crear el archivo de salida
+> "$OUT"
+
+current_ip=""
+declare -A ip_ports
+
+while IFS= read -r line || [ -n "$line" ]; do
+    # 1. Detectar cambio de IP del host
+    if [[ "$line" =~ Nmap\ scan\ report\ for\ ([0-9.]+) ]]; then
+        current_ip="${BASH_REMATCH[1]}"
+        ip_ports["$current_ip"]=""
+    fi
+
+    [ -z "$current_ip" ] && continue
+
+    # 2. Capturar puertos abiertos estándar que sean HTTP
+    if [[ "$line" =~ ^([0-9]+)/tcp[[:space:]]+open ]]; then
+        port="${BASH_REMATCH[1]}"
+        lower_line=$(echo "$line" | tr '[:upper:]' '[:lower:]')
+        if [[ "$lower_line" =~ "http" ]]; then
+            ip_ports["$current_ip"]="${ip_ports["$current_ip"]} $port"
+        fi
+    fi
+
+    # 3. Detectar puertos asociados a huellas de servicio (Fingerprints)
+    if [[ "$line" =~ SF-Port([0-9]+)-TCP ]]; then
+        fp_port="${BASH_REMATCH[1]}"
+    fi
+
+    # Si la línea pertenece a un fingerprint y contiene la palabra "HTTP"
+    if [[ "$line" =~ ^SF: && "$line" =~ "HTTP" && -n "$fp_port" ]]; then
+        ip_ports["$current_ip"]="${ip_ports["$current_ip"]} $fp_port"
+    fi
+done < "$FILE"
+
+# 4. Procesar, ordenar numéricamente y guardar en el archivo de salida
+for ip in "${!ip_ports[@]}"; do
+    # Limpiamos espacios, ordenamos numéricamente (-n) de forma única (-u) y unimos con comas
+    ports=$(echo "${ip_ports[$ip]}" | tr ' ' '\n' | grep -v '^$' | sort -nu | tr '\n' ',' | sed 's/,$//')
+    if [ -n "$ports" ]; then
+        echo "http-${ip}:${ports}" >> "$OUT"
+        echo "http-${ip}:${ports}"
+    fi
+done
+
+echo -e "\n[+] Archivo '$OUT' generado con éxito."
+EOF
+
+# Darle permisos de ejecución y correrlo de inmediato
+chmod +x extract_http.sh && ./extract_http.sh
+
+```
+## 🔍 ¿Cómo funciona tras bambalinas?
+ * **declare -A**: Crea un diccionario (array asociativo) en Bash para guardar los puertos agrupados por su dirección IP.
+ * **tr '[:upper:]' '[:lower:]'**: Convierte las líneas a minúsculas para que la búsqueda de la palabra "http" no sea susceptible a mayúsculas/minúsculas.
+ * **SF-Port([0-9]+)-TCP**: Identifica el puerto cuando Nmap empieza a imprimir un *Service Fingerprint* porque no reconoció el servicio de inmediato.
+ * **sort -nu**: Hace la magia de ordenación. La opción -n asegura que el puerto 8090 se ordene después del 7083, y la opción -u (unique) elimina los duplicados en caso de que un puerto se haya detectado tanto en la tabla estándar como en el fingerprint.
+## 📋 Verificación del Resultado
+Una vez ejecutado, si haces un cat http_resume.out, verás la salida formateada exactamente como la necesitas para continuar tu examen de penetración:
+```text
+http-164.6.40.190:8090,15450
+http-164.6.40.191:7083,8090,15450
+
+```
