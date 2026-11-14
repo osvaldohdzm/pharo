@@ -1,0 +1,3841 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAINTER V4.5 - EMISOR FOUNTAIN XOR & MÓDEM ACÚSTICO</title>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        :root {
+            --bg: #05070a;
+            --panel: #0d1117;
+            --border: #21262d;
+            --accent: #00ff41;
+            --accent-dim: rgba(0, 255, 65, 0.15);
+            --blue: #2f81f7;
+            --success: #00b82d;
+            --warn: #f0ad4e;
+            --amber: #ff9e00;
+            --danger: #f85149;
+            --text: #e6edf3;
+            --dim: #7d8590;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: radial-gradient(circle at top, #0b111b 0%, var(--bg) 70%);
+            color: var(--text);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* --- OVERLAY GLOBAL DRAG & DROP --- */
+        #global-drop-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 7, 10, 0.9);
+            border: 4px dashed var(--accent);
+            z-index: 10000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+        }
+
+        #global-drop-overlay.active {
+            display: flex;
+        }
+
+        /* --- FLASH ACK A PANTALLA COMPLETA --- */
+        #flash-ack-overlay {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle, rgba(0, 255, 65, 0.85) 0%, rgba(0, 184, 45, 0.95) 100%);
+            z-index: 12000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+        #flash-ack-overlay.trigger {
+            opacity: 1;
+        }
+
+        /* --- BARRA DE PROGRESO INDETERMINADA ASÍNCRONA --- */
+        .async-loader-wrap {
+            width: 100%;
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .async-loader-wrap.active {
+            display: flex;
+        }
+
+        .async-loader-track {
+            width: 100%;
+            height: 6px;
+            background: #010409;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .async-loader-bar {
+            width: 40%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            position: absolute;
+            top: 0;
+            left: -40%;
+            animation: indeterminateSlide 1.1s infinite linear;
+        }
+
+        @keyframes indeterminateSlide {
+            0% { left: -40%; }
+            100% { left: 100%; }
+        }
+
+        /* --- HEADER --- */
+        .header {
+            width: 100%;
+            max-width: 1020px;
+            padding: 14px 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(13, 17, 23, 0.92);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand {
+            font-weight: 900;
+            letter-spacing: 3px;
+            color: var(--accent);
+            font-size: 1.05rem;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .badge {
+            font-size: 0.65rem;
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid var(--accent);
+            padding: 2px 8px;
+            border-radius: 4px;
+            letter-spacing: 1px;
+        }
+
+        /* --- LAYOUT --- */
+        .dashboard {
+            width: 96%;
+            max-width: 1120px;
+            padding: 18px 0 50px;
+            display: grid;
+            grid-template-columns: 1.05fr 0.95fr;
+            gap: 20px;
+            align-items: start;
+        }
+
+        @media (max-width: 860px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: linear-gradient(180deg, #0f151e 0%, #0b0f16 100%);
+            border: 1px solid #242c37;
+            padding: 20px;
+            border-radius: 12px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+        }
+
+        .card-title {
+            font-size: 0.82rem;
+            font-weight: 800;
+            color: #fff;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            margin: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .step-pill {
+            background: var(--accent-dim);
+            color: var(--accent);
+            border: 1px solid rgba(0, 255, 65, 0.45);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.68rem;
+            font-weight: 800;
+            margin-right: 6px;
+        }
+
+        .section-hint {
+            font-size: 0.74rem;
+            color: var(--dim);
+            margin: -6px 0 2px 0;
+            line-height: 1.35;
+        }
+
+        /* --- PESTAÑAS DE LAS VÍAS DE RECUPERACIÓN --- */
+        .recovery-tabs {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            background: #05080d;
+            padding: 5px;
+            border-radius: 8px;
+            border: 1px solid #242c37;
+        }
+
+        @media (max-width: 560px) {
+            .recovery-tabs {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .rec-tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--dim);
+            padding: 8px 6px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.72rem;
+            font-weight: 700;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 3px;
+            transition: 0.18s;
+            text-align: center;
+        }
+
+        .rec-tab-btn small {
+            font-size: 0.60rem;
+            font-weight: 500;
+            opacity: 0.8;
+        }
+
+        .rec-tab-btn:hover {
+            color: var(--text);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .rec-tab-btn.active.tab-opt {
+            background: rgba(240, 173, 78, 0.15);
+            border-color: var(--warn);
+            color: var(--warn);
+        }
+
+        .rec-tab-btn.active.tab-ac {
+            background: rgba(47, 129, 247, 0.16);
+            border-color: var(--blue);
+            color: #79c0ff;
+        }
+
+        .rec-tab-btn.active.tab-csv {
+            background: rgba(0, 255, 65, 0.12);
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .rec-tab-btn.active.tab-voice {
+            background: rgba(163, 113, 247, 0.15);
+            border-color: #a371f7;
+            color: #d2a8ff;
+        }
+
+        .recovery-pane {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            animation: fadeInPane 0.18s ease;
+        }
+
+        .recovery-pane.active {
+            display: flex;
+        }
+
+        @keyframes fadeInPane {
+            from { opacity: 0; transform: translateY(2px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- SELECTOR TABS --- */
+        .selector {
+            display: flex;
+            background: #010409;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 4px;
+            gap: 4px;
+        }
+
+        .sel-btn {
+            flex: 1;
+            padding: 8px;
+            background: transparent;
+            border: none;
+            color: var(--dim);
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            border-radius: 3px;
+            transition: 0.15s;
+        }
+
+        .sel-btn.active {
+            background: var(--accent);
+            color: #000;
+        }
+
+        /* --- INPUT AREAS --- */
+        .input-box {
+            width: 100%;
+            min-height: 105px;
+            position: relative;
+        }
+
+        #area-file {
+            width: 100%;
+            height: 105px;
+            border: 1px dashed var(--dim);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            background: #05080d;
+            transition: 0.2s;
+            text-align: center;
+            padding: 10px;
+        }
+
+        #area-file:hover {
+            border-color: var(--accent);
+            background: rgba(0, 255, 65, 0.04);
+        }
+
+        #area-text {
+            width: 100%;
+            min-height: 90px;
+            background: #010409;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            padding: 10px;
+            font-family: Consolas, monospace;
+            font-size: 0.8rem;
+            resize: vertical;
+            outline: none;
+            border-radius: 4px;
+        }
+
+        #area-text-wrap {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            width: 100%;
+        }
+
+        /* --- PROTOCOL CONFIG (MTU + GZIP/ZSTD) --- */
+        .config-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .config-label {
+            font-size: 0.67rem;
+            color: var(--dim);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .preset-group {
+            display: flex;
+            gap: 6px;
+        }
+
+        .preset-btn {
+            flex: 1;
+            padding: 7px 6px;
+            background: #010409;
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.68rem;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: 0.15s;
+        }
+
+        .preset-btn:hover:not(:disabled) {
+            border-color: var(--accent);
+        }
+
+        .preset-btn.active {
+            border-color: var(--accent);
+            background: var(--accent-dim);
+            color: var(--accent);
+        }
+
+        .toggle-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #010409;
+            padding: 7px 12px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.72rem;
+        }
+
+        /* --- METRICS --- */
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 6px;
+            background: #010409;
+            padding: 9px 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.68rem;
+            color: var(--dim);
+        }
+
+        .metrics div {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .metrics b {
+            color: var(--text);
+        }
+
+        /* --- MATRIZ 2D GEMELA CON SELECCIÓN RECTANGULAR (MARQUEE) --- */
+        .grid2d-panel {
+            background: #070a0f;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .grid2d-wrap {
+            position: relative;
+            width: 100%;
+        }
+
+        #grid-2d-selector {
+            width: 100%;
+            height: 155px;
+            background: #05080e;
+            border: 1px solid #263042;
+            border-radius: 5px;
+            display: block;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        #grid2d-tooltip {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: rgba(5, 7, 10, 0.92);
+            border: 1px solid var(--amber);
+            color: var(--text);
+            font-size: 0.65rem;
+            padding: 3px 8px;
+            border-radius: 4px;
+            pointer-events: none;
+            display: none;
+            z-index: 15;
+        }
+
+        /* --- RUTAS DE RETORNO AISLADAS (ÓPTICO Y ACÚSTICO AUTÓNOMO) --- */
+        .channels-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 8px;
+        }
+
+        .channel-card {
+            background: #070a0f;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .channel-card.optical-route {
+            border-color: rgba(240, 173, 78, 0.35);
+            flex-direction: row;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+
+        .channel-card.acoustic-route {
+            border-color: rgba(47, 129, 247, 0.55);
+            background: linear-gradient(180deg, #070b12 0%, #04070c 100%);
+        }
+
+        #audio-fft-canvas {
+            width: 100%;
+            height: 98px;
+            background: #010409;
+            border: 1px solid #26354d;
+            border-radius: 5px;
+            display: block;
+            cursor: pointer;
+        }
+
+        .mic-controls-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .mic-select {
+            flex: 1;
+            min-width: 140px;
+            background: #010409;
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 5px 7px;
+            font-family: inherit;
+            font-size: 0.66rem;
+        }
+
+        .rx-live-banner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #02060d;
+            border: 1px solid #1c2738;
+            border-radius: 4px;
+            padding: 5px 8px;
+            font-size: 0.68rem;
+            color: var(--dim);
+        }
+
+        .rx-live-banner b {
+            color: var(--accent);
+            font-family: inherit;
+            letter-spacing: 0.5px;
+        }
+
+        /* Indicadores progresivos de estado acústico (Fase 1, Fase 2, Fase 3) */
+        .sync-phases-box {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 2px;
+        }
+
+        .sync-phase-row {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 0.65rem;
+            color: var(--dim);
+            padding: 4px 7px;
+            border-radius: 4px;
+            background: #04070b;
+            border: 1px solid #161c26;
+        }
+
+        .sync-phase-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #263042;
+            flex-shrink: 0;
+        }
+
+        .sync-phase-row.current {
+            color: #fff;
+            border-color: var(--blue);
+            background: rgba(47, 129, 247, 0.16);
+            font-weight: bold;
+        }
+
+        .sync-phase-row.current .sync-phase-dot {
+            background: var(--blue);
+            box-shadow: 0 0 6px var(--blue);
+        }
+
+        .sync-phase-row.done {
+            color: var(--accent);
+            border-color: rgba(0, 255, 65, 0.35);
+            background: rgba(0, 255, 65, 0.06);
+        }
+
+        .sync-phase-row.done .sync-phase-dot {
+            background: var(--accent);
+        }
+
+        /* --- HERRAMIENTAS DE CUADRATURA, RELLENO Y DESPLAZAMIENTO --- */
+        .quick-tools-panel {
+            background: #070a0f;
+            border: 1px solid var(--border);
+            border-radius: 5px;
+            padding: 9px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .quick-tools-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 5px;
+        }
+
+        .quick-tools-row.three-cols {
+            grid-template-columns: repeat(3, 1fr);
+        }
+
+        .tool-chip {
+            padding: 6px 4px;
+            background: #11161f;
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.65rem;
+            font-weight: bold;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: 0.15s;
+            text-align: center;
+            white-space: nowrap;
+        }
+
+        .tool-chip:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(0, 255, 65, 0.08);
+        }
+
+        .tool-chip.active {
+            border-color: var(--amber);
+            color: #000;
+            background: var(--amber);
+        }
+
+        .tool-chip.amber:hover:not(:disabled) {
+            border-color: var(--amber);
+            color: var(--amber);
+            background: rgba(255, 158, 0, 0.12);
+        }
+
+        /* --- QR DISPLAY, QUIET ZONE & LED PULSE --- */
+        #qr-frame {
+            background: #ffffff;
+            width: 100%;
+            max-width: 335px;
+            aspect-ratio: 1 / 1;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            border-radius: 4px;
+            position: relative;
+            box-shadow: 0 0 25px rgba(0, 0, 0, 0.7);
+        }
+
+        #qr-frame canvas,
+        #qr-frame img {
+            width: 100% !important;
+            height: 100% !important;
+            image-rendering: pixelated;
+            display: block;
+        }
+
+        .pulse-led {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #222;
+            border: 1px solid #000;
+            z-index: 5;
+            transition: background 0.04s, box-shadow 0.04s;
+        }
+
+        .pulse-led.on-a {
+            background: #00ff41;
+            box-shadow: 0 0 8px #00ff41;
+        }
+
+        .pulse-led.on-b {
+            background: #0088ff;
+            box-shadow: 0 0 8px #0088ff;
+        }
+
+        /* --- TIMELINE, SCRUBBER & INTERACTIVE LINEAR HEATMAP --- */
+        .timeline-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            position: relative;
+        }
+
+        .timeline-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: var(--dim);
+        }
+
+        .timeline-info b {
+            color: var(--accent);
+        }
+
+        #timeline-scrubber {
+            width: 100%;
+            accent-color: var(--accent);
+            cursor: pointer;
+            margin: 0;
+        }
+
+        .heatmap-container {
+            position: relative;
+            width: 100%;
+        }
+
+        #timeline-heatmap {
+            width: 100%;
+            height: 22px;
+            background: #010409;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            display: block;
+            cursor: crosshair;
+            touch-action: none;
+        }
+
+        #heatmap-tooltip {
+            position: absolute;
+            top: -28px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(5, 7, 10, 0.95);
+            border: 1px solid var(--amber);
+            color: var(--text);
+            font-size: 0.65rem;
+            padding: 2px 7px;
+            border-radius: 4px;
+            pointer-events: none;
+            white-space: nowrap;
+            display: none;
+            z-index: 20;
+        }
+
+        .player-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr 2fr 1fr 1fr;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 10px 8px;
+            border: 1px solid var(--border);
+            background: #161b22;
+            color: var(--text);
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: bold;
+            font-size: 0.72rem;
+            border-radius: 4px;
+            transition: 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .btn:hover:not(:disabled) {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .btn:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+
+        .btn-run {
+            background: var(--success);
+            color: #000;
+            border-color: var(--accent);
+            font-size: 0.8rem;
+        }
+
+        .btn-run:hover:not(:disabled) {
+            background: var(--accent);
+            color: #000;
+        }
+
+        .btn-reverse {
+            background: rgba(240, 173, 78, 0.12);
+            border-color: var(--warn);
+            color: var(--warn);
+        }
+
+        .btn-reverse:hover:not(:disabled) {
+            background: var(--warn);
+            color: #000;
+        }
+
+        .btn-mic.listening {
+            background: rgba(47, 129, 247, 0.22);
+            border-color: var(--blue);
+            color: #79c0ff;
+            box-shadow: 0 0 12px rgba(47, 129, 247, 0.35);
+        }
+
+        .shortcuts-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            font-size: 0.63rem;
+            color: var(--dim);
+            border-top: 1px solid var(--border);
+            padding-top: 6px;
+        }
+
+        .kbd {
+            background: #010409;
+            border: 1px solid var(--border);
+            padding: 1px 5px;
+            border-radius: 3px;
+            color: var(--text);
+        }
+
+        /* --- REVERSE ACK SCANNER MODAL --- */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.88);
+            z-index: 5000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-backdrop.open {
+            display: flex;
+        }
+
+        .modal-box {
+            background: var(--panel);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            width: 100%;
+            max-width: 500px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 0 0 40px rgba(0, 255, 65, 0.2);
+        }
+
+        #ack-reader {
+            width: 100%;
+            min-height: 260px;
+            background: #000;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        /* --- ZEN MODE FULLSCREEN & IDLE AUTO-HIDE --- */
+        body.zen-mode {
+            background: #000;
+            overflow: hidden;
+        }
+
+        body.zen-mode.zen-idle {
+            cursor: none !important;
+        }
+
+        body.zen-mode .header,
+        body.zen-mode .card:not(#qr-card) {
+            display: none !important;
+        }
+
+        body.zen-mode .dashboard {
+            position: fixed;
+            inset: 0;
+            width: 100vw;
+            max-width: 100vw;
+            height: 100vh;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        body.zen-mode #qr-card {
+            position: fixed;
+            inset: 0;
+            border: none;
+            background: #000;
+            width: 100vw;
+            height: 100vh;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        body.zen-mode #qr-card > *:not(#qr-frame) {
+            display: none !important;
+        }
+
+        body.zen-mode #qr-frame {
+            width: min(94vh, 94vw);
+            height: min(94vh, 94vw);
+            max-width: none;
+            padding: clamp(16px, 3.5vmin, 36px);
+            background: #ffffff;
+            border-radius: 0;
+            box-shadow: none;
+        }
+
+        .floating-bar {
+            position: fixed;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 9999;
+            background: rgba(13, 17, 23, 0.92);
+            padding: 12px;
+            border-radius: 30px;
+            border: 1px solid var(--border);
+            box-shadow: 0 0 24px rgba(0, 255, 65, 0.2);
+            transition: opacity 0.35s ease, transform 0.35s ease;
+        }
+
+        body.zen-mode .floating-bar {
+            display: flex;
+        }
+
+        body.zen-mode.zen-idle .floating-bar,
+        body.zen-mode.zen-idle .zen-hud {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .floating-bar .btn {
+            width: 46px;
+            height: 46px;
+            border-radius: 50%;
+            padding: 0;
+            font-size: 0.85rem;
+        }
+
+        .zen-hud {
+            position: fixed;
+            bottom: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            border: 1px solid var(--border);
+            color: var(--accent);
+            font-size: 0.75rem;
+            padding: 6px 16px;
+            border-radius: 20px;
+            display: none;
+            z-index: 9999;
+            transition: opacity 0.35s ease;
+        }
+
+        body.zen-mode .zen-hud {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- OVERLAY GLOBAL DRAG & DROP EN CUALQUIER PARTE DE LA VENTANA -->
+    <div id="global-drop-overlay">
+        <div style="font-size: 3.5rem; margin-bottom: 12px;">📥</div>
+        <div style="font-size: 1.3rem; font-weight: 900; color: var(--accent); letter-spacing: 2px;">
+            SUELTA EL ARCHIVO EN CUALQUIER LUGAR
+        </div>
+        <div style="font-size: 0.85rem; color: var(--text); margin-top: 6px;">
+            Empaquetado binario 8-bit con Códigos Fountain (XOR) y SHA-256
+        </div>
+    </div>
+
+    <!-- FLASH VERDE DE CONFIRMACIÓN A PANTALLA COMPLETA (FLASH ACK) -->
+    <div id="flash-ack-overlay">
+        <div style="font-size: 3.5rem; font-weight: 900;" id="flash-ack-title">✅ COLA RECONFIGURADA</div>
+        <div id="flash-ack-detail" style="font-size: 1.15rem; font-weight: bold; margin-top: 8px;">
+            Cola prioritaria sincronizada
+        </div>
+    </div>
+
+    <!-- CONTROLES FLOTANTES MODO ZEN (CON FPS+ / FPS- Y AUTO-HIDE 3s) -->
+    <div class="floating-bar">
+        <button class="btn" onclick="stepFrame(-1)" title="Bloque Anterior (Flecha Izq)">⏮</button>
+        <button class="btn btn-run" onclick="togglePlay()" id="zen-play" title="Play/Pause (Espacio)">▶</button>
+        <button class="btn" onclick="stepFrame(1)" title="Bloque Siguiente (Flecha Der)">⏭</button>
+        <button class="btn" onclick="adjustFPS(2)" title="Incrementar Cadencia (FPS +)">+FPS</button>
+        <button class="btn" onclick="adjustFPS(-2)" title="Decrementar Cadencia (FPS -)">-FPS</button>
+        <button class="btn btn-reverse" onclick="exitZen(); openAckScanner();" title="Retorno Óptico (Tecla A)">📷</button>
+        <button class="btn" onclick="exitZen()" style="color: var(--danger);" title="Salir Modo Zen (Z / Esc)">✖</button>
+    </div>
+    <div class="zen-hud" id="zen-hud">FRAME 0 / 0 | 10 FPS | CARRUSEL COMPLETO</div>
+
+    <!-- HEADER -->
+    <div class="header">
+        <div class="brand">
+            SAINTER//V4.5 <span class="badge">8-BIT BYTE MODE + FOUNTAIN XOR</span>
+        </div>
+        <div id="status" style="font-size: 0.7rem; color: var(--accent);">● LISTO PARA CARGA</div>
+    </div>
+
+    <!-- DASHBOARD PRINCIPAL -->
+    <div class="dashboard">
+        <!-- COLUMNA IZQUIERDA: ORIGEN, PROTOCOLO Y CANALES DE RETORNO AISLADOS -->
+        <div class="card">
+            <h3 class="card-title">
+                <span><span class="step-pill">PASO 1</span>Carga de Archivo & Empaquetado</span>
+                <span id="comp-badge" style="color: var(--dim); font-size: 0.65rem;">8-BIT + COMP: AUTO</span>
+            </h3>
+            <p class="section-hint">
+                Selecciona o arrastra el archivo a transmitir. El emisor lo comprime y genera tramas QR binarias con paridad Fountain XOR.
+            </p>
+
+            <div class="selector">
+                <button id="btn-mode-f" class="sel-btn active" onclick="changeInput('file')">📂 ARCHIVO BINARIO</button>
+                <button id="btn-mode-t" class="sel-btn" onclick="changeInput('text')">📝 TEXTO DIRECTO</button>
+            </div>
+
+            <div class="input-box">
+                <div id="area-file" onclick="document.getElementById('file-input').click()">
+                    <span style="font-size: 1.6rem; margin-bottom: 3px;">📦</span>
+                    <span style="font-weight: bold; font-size: 0.78rem; color: #fff;">ARRASTRA TU ARCHIVO AQUÍ O HAZ CLIC PARA ELEGIR</span>
+                    <span style="font-size: 0.66rem; color: var(--dim); margin-top: 2px;">Transmisión principal por QR (Modo 8-Bit + Códigos Fountain XOR)</span>
+                </div>
+                <div id="area-text-wrap">
+                    <textarea id="area-text" placeholder="Pega aquí el contenido o código para transmitir por canal óptico..."></textarea>
+                    <button class="btn btn-run" onclick="injectText()">PROCESAR Y FRAGMENTAR TEXTO</button>
+                </div>
+            </div>
+            <input type="file" id="file-input" style="display: none">
+
+            <!-- BARRA DE PROGRESO INDETERMINADA PARA COMPRESIÓN Y SHA-256 -->
+            <div class="async-loader-wrap" id="async-loader">
+                <div style="display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--accent);">
+                    <span id="async-loader-lbl">Calculando SHA-256 y comprimiendo...</span>
+                    <span>PROCESANDO</span>
+                </div>
+                <div class="async-loader-track">
+                    <div class="async-loader-bar"></div>
+                </div>
+            </div>
+
+            <!-- CONFIGURACIÓN DE MTU DINÁMICO Y COMPRESIÓN -->
+            <div class="config-row">
+                <div class="config-label">
+                    <span>TAMAÑO DE BLOQUE QR (MTU DINÁMICO)</span>
+                    <b id="mtu-lbl" style="color: var(--accent);">500 Bytes (Óptimo 8-Bit)</b>
+                </div>
+                <div class="preset-group">
+                    <button class="preset-btn" id="mtu-250" onclick="setMTU(250)">250B Resiliente</button>
+                    <button class="preset-btn active" id="mtu-500" onclick="setMTU(500)">500B Óptimo</button>
+                    <button class="preset-btn" id="mtu-700" onclick="setMTU(700)">700B Alta Densidad</button>
+                </div>
+            </div>
+
+            <div class="toggle-row">
+                <span>Compresión Automática + <b>Gotas de Paridad Fountain XOR</b></span>
+                <input type="checkbox" id="chk-gzip" checked onchange="reprocessCurrentSource()" style="accent-color: var(--accent); width: 17px; height: 17px; cursor: pointer;">
+            </div>
+
+            <!-- MÉTRICAS DE EMPAQUETADO -->
+            <div class="metrics">
+                <div>ARCHIVO: <b id="mt-name">SIN DATOS</b></div>
+                <div>ORIGINAL: <b id="mt-size">0 B</b></div>
+                <div>COMPRIMIDO: <b id="mt-comp">0 B</b></div>
+                <div>BLOQUES: <b id="mt-chunks">0</b></div>
+                <div>SHA-256: <b id="mt-hash">-</b></div>
+                <div>ACTIVOS: <b id="mt-active">0 blks</b></div>
+            </div>
+
+            <!-- PASO 2: RECUPERACIÓN DE FALTANTES (SOLO SI QUEDAN PENDIENTES) -->
+            <h3 class="card-title" style="margin-top: 6px;">
+                <span><span class="step-pill">PASO 2</span>Sincronizar Bloques Faltantes (Si Faltan)</span>
+                <span style="font-size: 0.64rem; color: var(--dim); font-weight: normal;">OPCIONAL</span>
+            </h3>
+            <p class="section-hint">
+                La transmisión por QR es el flujo principal. <b>Solo si al celular le faltan bloques al final</b>, elige cómo retransmitirlos:
+            </p>
+
+            <div class="preset-group">
+                <button class="preset-btn active" id="tx-mode-full" onclick="setTxMode('full')" title="Emite bloques secuenciales intercalando gotas de paridad XOR">🔄 Carrusel + XOR</button>
+                <button class="preset-btn" id="tx-mode-fountain" onclick="setTxMode('fountain')" title="Proyecta un flujo infinito sin estado de combinaciones lineales XOR">🌊 Fountain Puro (XOR)</button>
+                <button class="preset-btn" id="tx-mode-priority" onclick="setTxMode('priority')" title="Retransmite únicamente los bloques o macro-sectores faltantes">⚡ Solo Faltantes</button>
+            </div>
+
+            <!-- PESTAÑAS PARA ELEGIR ENTRE LAS 4 VÍAS DE REINTENTO -->
+            <div class="recovery-tabs">
+                <button class="rec-tab-btn active tab-opt" id="tab-btn-optical" onclick="switchRecoveryTab('optical')">
+                    <span>📷 1. Por QR Inverso</span>
+                    <small>Principal (Cámara)</small>
+                </button>
+                <button class="rec-tab-btn tab-csv" id="tab-btn-csv" onclick="switchRecoveryTab('csv')">
+                    <span>📋 2. Lista / Comas</span>
+                    <small>Pegar ACK Manual</small>
+                </button>
+                <button class="rec-tab-btn tab-ac" id="tab-btn-acoustic" onclick="switchRecoveryTab('acoustic')">
+                    <span>🔊 3. Beep-Boop Audio</span>
+                    <small>Micrófono automático</small>
+                </button>
+                <button class="rec-tab-btn tab-voice" id="tab-btn-voice" onclick="switchRecoveryTab('voice')">
+                    <span>🎙️ 4. Grabar Audio</span>
+                    <small>Decodificación offline</small>
+                </button>
+            </div>
+
+            <!-- VÍA 1 (PRINCIPAL): ESCANEAR QR DE RETORNO DESDE EL CELULAR -->
+            <div class="recovery-pane active" id="pane-optical">
+                <div class="channel-card optical-route" style="padding: 14px;">
+                    <div style="display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 190px;">
+                        <b style="color: var(--warn); font-size: 0.80rem;">📷 Vía 1: Escanear QR de Faltantes del Celular</b>
+                        <span style="font-size: 0.70rem; color: var(--dim); line-height: 1.35;">
+                            En el celular toca <b>"1. Retorno Óptico"</b> y apunta su pantalla hacia la cámara de esta laptop. Sincroniza miles de bloques en 1 segundo.
+                        </span>
+                    </div>
+                    <button class="btn btn-reverse" onclick="openAckScanner()" id="btn-scan-ack" disabled style="padding: 12px 16px; font-size: 0.78rem;">
+                        📷 Abrir Lector QR [A]
+                    </button>
+                </div>
+            </div>
+
+            <!-- VÍA 2 (COPIA DE RESTANTES POR COMAS / RANGOS / PORTAPAPELES) -->
+            <div class="recovery-pane" id="pane-csv">
+                <div class="channel-card" style="border-color: rgba(0, 255, 65, 0.35);">
+                    <div class="config-label">
+                        <b style="color: var(--accent); font-size: 0.76rem;">📋 Vía 2: Pegar Bloques Faltantes (Comas, Rangos o Macro-Sectores)</b>
+                    </div>
+                    <div style="font-size: 0.69rem; color: var(--dim); line-height: 1.35;">
+                        Pega la lista copiada desde el celular (ej. <code>0, 1, 5, 9</code> o <code>0-12, 45</code> o <code>S04,09</code>) y pulsa <b>Pegar & Reintentar</b>:
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                        <input type="text" id="custom-frames" placeholder="Ej: 0, 1, 2, 5  ó  0-12, 18-24  ó  S04,09,12"
+                            style="flex: 1; min-width: 180px; padding: 9px 10px; background: #010409; border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-family: Consolas, monospace; font-size: 0.75rem;">
+                        <button class="btn btn-reverse" onclick="pasteFromClipboardAndApply()" title="Lee automáticamente del portapapeles y aplica los bloques faltantes" style="border-color: var(--accent); color: var(--accent); background: rgba(0, 255, 65, 0.1);">
+                            📋 Pegar & Reintentar
+                        </button>
+                        <button class="btn" onclick="applyCustomFrames()">APLICAR</button>
+                    </div>
+
+                    <!-- HERRAMIENTAS DE CUADRATURA, RELLENO Y DESFASE -->
+                    <div class="quick-tools-panel" style="margin-top: 4px;">
+                        <div class="config-label">
+                            <span>AJUSTE FINO DE COLA (CUADRATURA, RELLENO Y DESFASE)</span>
+                        </div>
+                        <div class="quick-tools-row three-cols">
+                            <button class="tool-chip" onclick="squareToStart()" title="Alinear cola al inicio del primer segmento y emitir cabecera SYN">⏮ Cuadrar Inicio</button>
+                            <button class="tool-chip amber" onclick="fillSmallGaps(3)" title="Unir huecos cortos (<=3 bloques) entre segmentos faltantes">🧩 Rellenar Huecos</button>
+                            <button class="tool-chip amber" onclick="expandActiveIntervals(2)" title="Añadir ±2 bloques en los bordes de cada intervalo">↔ Expandir ±2</button>
+                        </div>
+
+                        <div class="quick-tools-row">
+                            <button class="tool-chip" onclick="shiftActiveQueue(-10)">-10 Frames</button>
+                            <button class="tool-chip" onclick="shiftActiveQueue(-1)">-1 Frame</button>
+                            <button class="tool-chip" onclick="shiftActiveQueue(1)">+1 Frame</button>
+                            <button class="tool-chip" onclick="shiftActiveQueue(10)">+10 Frames</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VÍA 3 (RECEPTOR ACÚSTICO) -->
+            <div class="recovery-pane" id="pane-acoustic">
+                <div class="channel-card acoustic-route">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <b style="color: #79c0ff; font-size: 0.8rem;">🔊 Receptor Acústico</b>
+                        <span id="fft-freq-lbl" style="color: var(--dim); font-weight: bold; font-size: 0.72rem;">APAGADO</span>
+                    </div>
+
+                    <button class="btn btn-mic" id="btn-audio-listen" onclick="toggleAcousticListener()" style="padding: 13px; font-size: 0.85rem; width: 100%;">
+                        🎙️ COMENZAR A ESCUCHAR
+                    </button>
+
+                    <div style="background: #02060d; border: 1px solid #26354d; border-radius: 6px; padding: 10px; text-align: center;">
+                        <div style="font-size: 0.65rem; color: var(--dim); margin-bottom: 4px;">MENSAJE RECIBIDO DESDE EL CELULAR:</div>
+                        <div id="rx-live-buffer" style="font-family: Consolas, monospace; font-size: 1.05rem; font-weight: 900; color: var(--accent); letter-spacing: 1px; overflow-wrap: anywhere;">ESPERANDO SONIDO...</div>
+                        <div id="rx-snr-lbl" style="color: #79c0ff; font-size: 0.65rem; margin-top: 4px;">Nivel: 0/255 | Gain: 1.8x</div>
+                    </div>
+
+                    <canvas id="audio-fft-canvas" onclick="forceActivateMicrophone()" title="El micrófono se activa automáticamente al abrir esta pestaña" style="height: 75px;"></canvas>
+
+                    <div class="mic-controls-row">
+                        <select id="mic-select" class="mic-select" onchange="switchMicrophoneDevice(this.value)" title="Seleccionar micrófono de la laptop">
+                            <option value="">🎙️ Micrófono predeterminado del sistema...</option>
+                        </select>
+                        <button class="tool-chip" id="btn-mic-gain" onclick="cycleMicGain()" title="Aumentar ganancia digital del micrófono si el sonido del celular llega bajo">🎚️ Gain: 1.8x</button>
+                    </div>
+                    <details>
+                        <summary style="cursor: pointer; color: var(--dim); font-size: 0.7rem;">Diagnóstico de audio</summary>
+                        <div style="font-size: 0.65rem; color: var(--dim); line-height: 1.35; margin: 4px 0;">
+                            La prueba verifica el recorrido físico desde las bocinas hasta el micrófono; no inyecta tonos directamente en el analizador.
+                        </div>
+                        <button class="tool-chip amber" onclick="runAcousticLoopbackTest()" title="Emite una ráfaga FSK de prueba por las bocinas de esta laptop">🔊 Probar sonido local</button>
+                    </details>
+
+                    <!-- ESTADOS VISUALES PROGRESIVOS UNIFICADOS DURANTE TRANSFERENCIA ACÚSTICA -->
+                    <div class="sync-phases-box" id="sender-acoustic-phases">
+                        <div class="sync-phase-row" id="snd-phase-1">
+                            <span class="sync-phase-dot"></span>
+                            <span>Fase 1: «Negociando conexión...»</span>
+                        </div>
+                        <div class="sync-phase-row" id="snd-phase-2">
+                            <span class="sync-phase-dot"></span>
+                            <span id="snd-phase-2-txt">Fase 2: «Transmitiendo bloques faltantes...»</span>
+                        </div>
+                        <div class="sync-phase-row" id="snd-phase-3">
+                            <span class="sync-phase-dot"></span>
+                            <span>Fase 3: «Confirmación recibida de la laptop»</span>
+                        </div>
+                    </div>
+                </div>
+                </div>
+
+                <div class="recovery-pane" id="pane-voice">
+                        <div class="channel-card" style="border-color: rgba(163, 113, 247, 0.55);">
+                            <b style="color: #d2a8ff; font-size: 0.8rem;">🎙️ Receptor Acústico Offline</b>
+                            <div style="font-size: 0.69rem; color: var(--dim); line-height: 1.4;">
+                                Pulsa grabar, transmite desde el celular y detén la grabación al terminar las dos pasadas. La decodificación se realiza localmente en esta página.
+                            </div>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button class="btn btn-mic" id="btn-offline-record" onclick="toggleOfflineRecording()" style="flex: 1; min-width: 150px;">
+                                    🎙️ COMENZAR GRABACIÓN
+                                </button>
+                                <button class="btn" id="btn-offline-play" onclick="playOfflineRecording()" disabled>▶️ OÍR GRABACIÓN</button>
+                                <button class="btn btn-reverse" id="btn-offline-decode" onclick="decodeOfflineBurst()" disabled>🧠 DECODIFICAR Y APLICAR</button>
+                            </div>
+                            <canvas id="offline-audio-waveform" title="Forma de onda de la grabación" style="display: block; width: 100%; height: 72px; background: #02060d; border: 1px solid #26354d; border-radius: 6px;"></canvas>
+                            <div id="offline-audio-status" role="status" aria-live="polite" style="font-size: 0.7rem; color: var(--dim); min-height: 1.2em;">
+                                Aún no hay una grabación.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- COLUMNA DERECHA: VISOR QR PRINCIPAL, MATRIZ 2D CON SELECCIÓN RECTANGULAR Y CADENCIA -->
+        <div class="card" id="qr-card">
+            <h3 class="card-title">
+                <span><span class="step-pill">PASO 3</span>Proyector QR Principal & Control de Flujo</span>
+                <span id="frame-badge" style="color: var(--accent);">STANDBY</span>
+            </h3>
+
+            <div id="qr-frame">
+                <div class="pulse-led" id="pulse-led" title="Testigo de pulso de emisión"></div>
+                <div id="qr-canvas-mount" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                    <div style="color: #000; font-size: 0.75rem; font-weight: bold; text-align: center;">
+                        ESPERANDO CARGA DE DATOS<br><span style="font-size: 0.65rem; color: #555;">QUIET ZONE 4X ACTIVA</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MATRIZ 2D GEMELA CON SELECCIÓN RECTANGULAR VISUAL (IDÉNTICA AL GRID DEL MÓVIL) -->
+            <div class="grid2d-panel">
+                <div class="config-label" style="flex-wrap: wrap; gap: 6px;">
+                    <span>📐 MATRIZ 2D GEMELA (ARRASTRA UN RECTÁNGULO SOBRE LA ZONA DE HUECOS)</span>
+                    <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                        <button class="tool-chip active" id="rect-mode-replace" onclick="setRectSelectMode('replace')" title="El rectángulo dibujado aísla exactamente esa región">Aislar Área</button>
+                        <button class="tool-chip" id="rect-mode-add" onclick="setRectSelectMode('add')" title="Sumar varios rectángulos a la cola prioritaria">+ Sumar</button>
+                        <button class="tool-chip" id="rect-mode-sub" onclick="setRectSelectMode('sub')" title="Desmarcar rectángulo">- Quitar</button>
+                        <button class="tool-chip" id="rect-mode-all" onclick="setRectSelectMode('all')" title="Restaurar y seleccionar todos los bloques de la matriz completa">Todo Completo</button>
+                    </div>
+                </div>
+                <div class="grid2d-wrap">
+                    <div id="grid2d-tooltip">Fila 1, Col 1</div>
+                    <canvas id="grid-2d-selector"></canvas>
+                </div>
+            </div>
+
+            <!-- LÍNEA DE TIEMPO + MAPA DE CALOR LINEAL INTERACTIVO -->
+            <div class="timeline-wrap">
+                <div class="timeline-info">
+                    <span>POSICIÓN EN COLA: <b id="lbl-queue-pos">0 / 0</b></span>
+                    <span>ÍNDICE DE BLOQUE: <b id="lbl-chunk-idx">-</b></span>
+                </div>
+                <input type="range" id="timeline-scrubber" min="0" max="0" value="0" disabled oninput="scrubTimeline(this.value)">
+                <div class="heatmap-container">
+                    <div id="heatmap-tooltip">Bloque #0</div>
+                    <canvas id="timeline-heatmap"></canvas>
+                </div>
+            </div>
+
+            <!-- CONTROL DE CADENCIA (FPS) -->
+            <div class="config-row">
+                <div class="config-label">
+                    <span>CADENCIA DE EMISIÓN ÓPTICA</span>
+                    <b id="speed-lbl" style="color: var(--accent);">12 FPS (83 ms)</b>
+                </div>
+                <div class="preset-group">
+                    <button class="preset-btn" onclick="setFPS(8)">8 FPS</button>
+                    <button class="preset-btn active" id="fps-12" onclick="setFPS(12)">12 FPS</button>
+                    <button class="preset-btn" onclick="setFPS(16)">16 FPS</button>
+                    <button class="preset-btn" onclick="setFPS(22)">22 FPS</button>
+                </div>
+                <input type="range" id="fps-range" min="2" max="30" step="1" value="12"
+                    style="width:100%; accent-color: var(--accent);" oninput="setFPS(this.value, true)">
+            </div>
+
+            <!-- CONTROLES TIPO MEDIA PLAYER -->
+            <div class="player-controls">
+                <button class="btn" id="btn-rewind" disabled onclick="rewind()" title="Reiniciar al principio">⏮</button>
+                <button class="btn" id="btn-prev" disabled onclick="stepFrame(-1)" title="Paso Anterior (←)">◀</button>
+                <button class="btn btn-run" id="run-btn" disabled onclick="togglePlay()">▶ INICIAR</button>
+                <button class="btn" id="btn-next" disabled onclick="stepFrame(1)" title="Paso Siguiente (→)">▶|</button>
+                <button class="btn" id="btn-zen" disabled onclick="enterZen()" title="Pantalla Completa Modo Zen (Z / F)">⛶ ZEN</button>
+            </div>
+
+            <div class="shortcuts-bar">
+                <span><b class="kbd">Espacio</b> Play/Pausa</span>
+                <span><b class="kbd">←</b> <b class="kbd">→</b> Paso</span>
+                <span><b class="kbd">[</b> <b class="kbd">]</b> Desplazar ±1</span>
+                <span><b class="kbd">Z</b> Zen</span>
+                <span><b class="kbd">A</b> Retorno Óptico</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL EXCLUSIVO DE RETORNO ÓPTICO (CÁMARA QR) -->
+    <div class="modal-backdrop" id="ack-modal">
+        <div class="modal-box">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <b style="color: var(--accent); font-size: 0.85rem;">📷 Retorno Óptico (Bitmap Plano / QR)</b>
+                <button class="btn" onclick="closeAckScanner()" style="padding: 4px 10px; color: var(--danger);">✖ CERRAR</button>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--dim);">
+                Apunta la pantalla del móvil con el <b>código QR de Bitmap Plano</b> hacia la cámara de esta laptop para reconfigurar todos los bloques pendientes en una sola lectura.
+            </div>
+            <div id="ack-reader"></div>
+            <div id="ack-status" style="font-size: 0.75rem; color: var(--warn); text-align: center;">
+                Buscando código QR en cámara...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // =========================================================================
+        // 1. MOTOR GENERADOR QR MODO 8-BIT PURO (SIN BOM NI EXPANSIÓN UTF-8)
+        // =========================================================================
+        var QRCode;
+        !function () {
+            function a(a) {
+                this.mode = c.MODE_8BIT_BYTE;
+                this.data = a;
+                this.parsedData = [];
+                for (var d = 0, e = this.data.length; e > d; d++) {
+                    this.parsedData.push(this.data.charCodeAt(d) & 0xff);
+                }
+            }
+            function b(a, b) { this.typeNumber = a, this.errorCorrectLevel = b, this.modules = null, this.moduleCount = 0, this.dataCache = null, this.dataList = [] }
+            function i(a, b) { if (void 0 == a.length) throw new Error(a.length + "/" + b); for (var c = 0; c < a.length && 0 == a[c];)c++; this.num = new Array(a.length - c + b); for (var d = 0; d < a.length - c; d++)this.num[d] = a[d + c] }
+            function j(a, b) { this.totalCount = a, this.dataCount = b }
+            function k() { this.buffer = [], this.length = 0 }
+            function r(a, b) {
+                for (var c = 1, e = a.length + 3, f = 0, g = l.length; g > f; f++) {
+                    var h = 0;
+                    switch (b) { case d.L: h = l[f][0]; break; case d.M: h = l[f][1]; break; case d.Q: h = l[f][2]; break; case d.H: h = l[f][3] }
+                    if (h >= e) break;
+                    c++;
+                }
+                if (c > l.length) throw new Error("Payload excede capacidad QR");
+                return c;
+            }
+            a.prototype = { getLength: function () { return this.parsedData.length }, write: function (a) { for (var b = 0, c = this.parsedData.length; c > b; b++)a.put(this.parsedData[b], 8) } };
+            b.prototype = {
+                addData: function (b) { var c = new a(b); this.dataList.push(c), this.dataCache = null },
+                isDark: function (a, b) { if (0 > a || this.moduleCount <= a || 0 > b || this.moduleCount <= b) throw new Error(a + "," + b); return this.modules[a][b] },
+                getModuleCount: function () { return this.moduleCount },
+                make: function () { this.makeImpl(!1, 2) },
+                makeImpl: function (a, c) {
+                    this.moduleCount = 4 * this.typeNumber + 17, this.modules = new Array(this.moduleCount);
+                    for (var d = 0; d < this.moduleCount; d++) { this.modules[d] = new Array(this.moduleCount); for (var e = 0; e < this.moduleCount; e++)this.modules[d][e] = null }
+                    this.setupPositionProbePattern(0, 0), this.setupPositionProbePattern(this.moduleCount - 7, 0), this.setupPositionProbePattern(0, this.moduleCount - 7),
+                        this.setupPositionAdjustPattern(), this.setupTimingPattern(), this.setupTypeInfo(a, c), this.typeNumber >= 7 && this.setupTypeNumber(a),
+                        null == this.dataCache && (this.dataCache = b.createData(this.typeNumber, this.errorCorrectLevel, this.dataList)), this.mapData(this.dataCache, c)
+                },
+                setupPositionProbePattern: function (a, b) { for (var c = -1; 7 >= c; c++)if (!(-1 >= a + c || this.moduleCount <= a + c)) for (var d = -1; 7 >= d; d++)-1 >= b + d || this.moduleCount <= b + d || (this.modules[a + c][b + d] = c >= 0 && 6 >= c && (0 == d || 6 == d) || d >= 0 && 6 >= d && (0 == c || 6 == c) || c >= 2 && 4 >= c && d >= 2 && 4 >= d ? !0 : !1) },
+                setupTimingPattern: function () { for (var a = 8; a < this.moduleCount - 8; a++)null == this.modules[a][6] && (this.modules[a][6] = 0 == a % 2); for (var b = 8; b < this.moduleCount - 8; b++)null == this.modules[6][b] && (this.modules[6][b] = 0 == b % 2) },
+                setupPositionAdjustPattern: function () { for (var a = f.getPatternPosition(this.typeNumber), b = 0; b < a.length; b++)for (var c = 0; c < a.length; c++) { var d = a[b], e = a[c]; if (null == this.modules[d][e]) for (var g = -2; 2 >= g; g++)for (var h = -2; 2 >= h; h++)this.modules[d + g][e + h] = -2 == g || 2 == g || -2 == h || 2 == h || 0 == g && 0 == h ? !0 : !1 } },
+                setupTypeNumber: function (a) { for (var b = f.getBCHTypeNumber(this.typeNumber), c = 0; 18 > c; c++) { var d = !a && 1 == (1 & b >> c); this.modules[Math.floor(c / 3)][c % 3 + this.moduleCount - 8 - 3] = d } for (var c = 0; 18 > c; c++) { var d = !a && 1 == (1 & b >> c); this.modules[c % 3 + this.moduleCount - 8 - 3][Math.floor(c / 3)] = d } },
+                setupTypeInfo: function (a, b) { for (var c = this.errorCorrectLevel << 3 | b, d = f.getBCHTypeInfo(c), e = 0; 15 > e; e++) { var g = !a && 1 == (1 & d >> e); 6 > e ? this.modules[e][8] = g : 8 > e ? this.modules[e + 1][8] = g : this.modules[this.moduleCount - 15 + e][8] = g } for (var e = 0; 15 > e; e++) { var g = !a && 1 == (1 & d >> e); 8 > e ? this.modules[8][this.moduleCount - e - 1] = g : 9 > e ? this.modules[8][15 - e - 1 + 1] = g : this.modules[8][15 - e - 1] = g } this.modules[this.moduleCount - 8][8] = !a },
+                mapData: function (a, b) { for (var c = -1, d = this.moduleCount - 1, e = 7, g = 0, h = this.moduleCount - 1; h > 0; h -= 2)for (6 == h && h--; ;) { for (var i = 0; 2 > i; i++)if (null == this.modules[d][h - i]) { var j = !1; g < a.length && (j = 1 == (1 & a[g] >>> e)); var k = f.getMask(b, d, h - i); k && (j = !j), this.modules[d][h - i] = j, e--, -1 == e && (g++, e = 7) } if (d += c, 0 > d || this.moduleCount <= d) { d -= c, c = -c; break } } }
+            };
+            b.PAD0 = 236, b.PAD1 = 17, b.createData = function (a, c, d) { for (var e = j.getRSBlocks(a, c), g = new k, h = 0; h < d.length; h++) { var i = d[h]; g.put(i.mode, 4), g.put(i.getLength(), f.getLengthInBits(i.mode, a)), i.write(g) } for (var l = 0, h = 0; h < e.length; h++)l += e[h].dataCount; if (g.getLengthInBits() > 8 * l) throw new Error("code length overflow. (" + g.getLengthInBits() + ">" + 8 * l + ")"); for (g.getLengthInBits() + 4 <= 8 * l && g.put(0, 4); 0 != g.getLengthInBits() % 8;)g.putBit(!1); for (; ;) { if (g.getLengthInBits() >= 8 * l) break; if (g.put(b.PAD0, 8), g.getLengthInBits() >= 8 * l) break; g.put(b.PAD1, 8) } return b.createBytes(g, e) };
+            b.createBytes = function (a, b) { for (var c = 0, d = 0, e = 0, g = new Array(b.length), h = new Array(b.length), j = 0; j < b.length; j++) { var k = b[j].dataCount, l = b[j].totalCount - k; d = Math.max(d, k), e = Math.max(e, l), g[j] = new Array(k); for (var m = 0; m < g[j].length; m++)g[j][m] = 255 & a.buffer[m + c]; c += k; var n = f.getErrorCorrectPolynomial(l), o = new i(g[j], n.getLength() - 1), p = o.mod(n); h[j] = new Array(n.getLength() - 1); for (var m = 0; m < h[j].length; m++) { var q = m + p.getLength() - h[j].length; h[j][m] = q >= 0 ? p.get(q) : 0 } } for (var r = 0, m = 0; m < b.length; m++)r += b[m].totalCount; for (var s = new Array(r), t = 0, m = 0; d > m; m++)for (var j = 0; j < b.length; j++)m < g[j].length && (s[t++] = g[j][m]); for (var m = 0; e > m; m++)for (var j = 0; j < b.length; j++)m < h[j].length && (s[t++] = h[j][m]); return s };
+            for (var c = { MODE_NUMBER: 1, MODE_ALPHA_NUM: 2, MODE_8BIT_BYTE: 4, MODE_KANJI: 8 }, d = { L: 1, M: 0, Q: 3, H: 2 }, e = { PATTERN000: 0, PATTERN001: 1, PATTERN010: 2, PATTERN011: 3, PATTERN100: 4, PATTERN101: 5, PATTERN110: 6, PATTERN111: 7 }, f = { PATTERN_POSITION_TABLE: [[], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50], [6, 30, 54], [6, 32, 58], [6, 34, 62], [6, 26, 46, 66], [6, 26, 48, 70], [6, 26, 50, 74], [6, 30, 54, 78], [6, 30, 56, 82], [6, 30, 58, 86], [6, 34, 62, 90], [6, 28, 50, 72, 94], [6, 26, 50, 74, 98], [6, 30, 54, 78, 102], [6, 28, 54, 80, 106], [6, 32, 58, 84, 110], [6, 30, 58, 86, 114], [6, 34, 62, 90, 118], [6, 26, 50, 74, 98, 122], [6, 30, 54, 78, 102, 126], [6, 26, 52, 78, 104, 130], [6, 30, 56, 82, 108, 134], [6, 34, 60, 86, 112, 138], [6, 30, 58, 86, 114, 142], [6, 34, 62, 90, 118, 146], [6, 30, 54, 78, 102, 126, 150], [6, 24, 50, 76, 102, 128, 154], [6, 28, 54, 80, 106, 132, 158], [6, 32, 58, 84, 110, 136, 162], [6, 26, 54, 82, 110, 138, 166], [6, 30, 58, 86, 114, 142, 170]], G15: 1335, G18: 7973, G15_MASK: 21522, getBCHTypeInfo: function (a) { for (var b = a << 10; f.getBCHDigit(b) - f.getBCHDigit(f.G15) >= 0;)b ^= f.G15 << f.getBCHDigit(b) - f.getBCHDigit(f.G15); return (a << 10 | b) ^ f.G15_MASK }, getBCHTypeNumber: function (a) { for (var b = a << 12; f.getBCHDigit(b) - f.getBCHDigit(f.G18) >= 0;)b ^= f.G18 << f.getBCHDigit(b) - f.getBCHDigit(f.G18); return a << 12 | b }, getBCHDigit: function (a) { for (var b = 0; 0 != a;)b++, a >>>= 1; return b }, getPatternPosition: function (a) { return f.PATTERN_POSITION_TABLE[a - 1] }, getMask: function (a, b, c) { switch (a) { case e.PATTERN000: return 0 == (b + c) % 2; case e.PATTERN001: return 0 == b % 2; case e.PATTERN010: return 0 == c % 3; case e.PATTERN011: return 0 == (b + c) % 3; case e.PATTERN100: return 0 == (Math.floor(b / 2) + Math.floor(c / 3)) % 2; case e.PATTERN101: return 0 == b * c % 2 + b * c % 3; case e.PATTERN110: return 0 == (b * c % 2 + b * c % 3) % 2; case e.PATTERN111: return 0 == (b * c % 3 + (b + c) % 2) % 2; default: throw new Error("bad maskPattern:" + a) } }, getErrorCorrectPolynomial: function (a) { for (var b = new i([1], 0), c = 0; a > c; c++)b = b.multiply(new i([1, g.gexp(c)], 0)); return b }, getLengthInBits: function (a, b) { if (b >= 1 && 10 > b) return 8; return 16; } }, g = { glog: function (a) { if (1 > a) throw new Error("glog(" + a + ")"); return g.LOG_TABLE[a] }, gexp: function (a) { for (; 0 > a;)a += 255; for (; a >= 256;)a -= 255; return g.EXP_TABLE[a] }, EXP_TABLE: new Array(256), LOG_TABLE: new Array(256) }, h = 0; 8 > h; h++)g.EXP_TABLE[h] = 1 << h;
+            for (var h = 8; 256 > h; h++)g.EXP_TABLE[h] = g.EXP_TABLE[h - 4] ^ g.EXP_TABLE[h - 5] ^ g.EXP_TABLE[h - 6] ^ g.EXP_TABLE[h - 8];
+            for (var h = 0; 255 > h; h++)g.LOG_TABLE[g.EXP_TABLE[h]] = h;
+            i.prototype = { get: function (a) { return this.num[a] }, getLength: function () { return this.num.length }, multiply: function (a) { for (var b = new Array(this.getLength() + a.getLength() - 1), c = 0; c < this.getLength(); c++)for (var d = 0; d < a.getLength(); d++)b[c + d] ^= g.gexp(g.glog(this.get(c)) + g.glog(a.get(d))); return new i(b, 0) }, mod: function (a) { if (this.getLength() - a.getLength() < 0) return this; for (var b = g.glog(this.get(0)) - g.glog(a.get(0)), c = new Array(this.getLength()), d = 0; d < this.getLength(); d++)c[d] = this.get(d); for (var d = 0; d < a.getLength(); d++)c[d] ^= g.gexp(g.glog(a.get(d)) + b); return new i(c, 0).mod(a) } };
+            j.RS_BLOCK_TABLE = [[1, 26, 19], [1, 26, 16], [1, 26, 13], [1, 26, 9], [1, 44, 34], [1, 44, 28], [1, 44, 22], [1, 44, 16], [1, 70, 55], [1, 70, 44], [2, 35, 17], [2, 35, 13], [1, 100, 80], [2, 50, 32], [2, 50, 24], [4, 25, 9], [1, 134, 108], [2, 67, 43], [2, 33, 15, 2, 34, 16], [2, 33, 11, 2, 34, 12], [2, 86, 68], [4, 43, 27], [4, 43, 19], [4, 43, 15], [2, 98, 78], [4, 49, 31], [2, 32, 14, 4, 33, 15], [4, 39, 13, 1, 40, 14], [2, 121, 97], [2, 60, 38, 2, 61, 39], [4, 40, 18, 2, 41, 19], [4, 40, 14, 2, 41, 15], [2, 146, 116], [3, 58, 36, 2, 59, 37], [4, 36, 16, 4, 37, 17], [4, 36, 12, 4, 37, 13], [2, 86, 68, 2, 87, 69], [4, 69, 43, 1, 70, 44], [6, 43, 19, 2, 44, 20], [6, 43, 15, 2, 44, 16], [4, 101, 81], [1, 80, 50, 4, 81, 51], [4, 50, 22, 4, 51, 23], [3, 36, 12, 8, 37, 13], [2, 116, 92, 2, 117, 93], [6, 58, 36, 2, 59, 37], [4, 46, 20, 6, 47, 21], [7, 42, 14, 4, 43, 15], [4, 133, 107], [8, 59, 37, 1, 60, 38], [8, 44, 20, 4, 45, 21], [12, 33, 11, 4, 34, 12], [3, 145, 115, 1, 146, 116], [4, 64, 40, 5, 65, 41], [11, 36, 16, 5, 37, 17], [11, 36, 12, 5, 37, 13], [5, 109, 87, 1, 110, 88], [5, 65, 41, 5, 66, 42], [5, 54, 24, 7, 55, 25], [11, 36, 12], [5, 122, 98, 1, 123, 99], [7, 73, 45, 3, 74, 46], [15, 43, 19, 2, 44, 20], [3, 45, 15, 13, 46, 16], [1, 135, 107, 5, 136, 108], [10, 74, 46, 1, 75, 47], [1, 50, 22, 15, 51, 23], [2, 42, 14, 17, 43, 15], [5, 150, 120, 1, 151, 121], [9, 69, 43, 4, 70, 44], [17, 50, 22, 1, 51, 23], [2, 42, 14, 19, 43, 15], [3, 141, 113, 4, 142, 114], [3, 70, 44, 11, 71, 45], [17, 47, 21, 4, 48, 22], [9, 39, 13, 16, 40, 14], [3, 135, 107, 5, 136, 108], [3, 67, 41, 13, 68, 42], [15, 54, 24, 5, 55, 25], [15, 43, 15, 10, 44, 16], [4, 144, 116, 4, 145, 117], [17, 68, 42], [17, 50, 22, 6, 51, 23], [19, 46, 16, 6, 47, 17], [2, 139, 111, 7, 140, 112], [17, 74, 46], [7, 54, 24, 16, 55, 25], [34, 37, 13], [4, 151, 121, 5, 152, 122], [4, 75, 47, 14, 76, 48], [11, 54, 24, 14, 55, 25], [16, 45, 15, 14, 46, 16], [6, 147, 117, 4, 148, 118], [6, 73, 45, 14, 74, 46], [11, 54, 24, 16, 55, 25], [30, 46, 16, 2, 47, 17], [8, 132, 106, 4, 133, 107], [8, 75, 47, 13, 76, 48], [7, 54, 24, 22, 55, 25], [22, 45, 15, 13, 46, 16], [10, 142, 114, 2, 143, 115], [19, 74, 46, 4, 75, 47], [28, 50, 22, 6, 51, 23], [33, 46, 16, 4, 47, 17], [8, 152, 122, 4, 153, 123], [22, 73, 45, 3, 74, 46], [8, 53, 23, 26, 54, 24], [12, 45, 15, 28, 46, 16], [3, 147, 117, 10, 148, 118], [3, 73, 45, 23, 74, 46], [4, 54, 24, 31, 55, 25], [11, 45, 15, 31, 46, 16], [7, 146, 116, 7, 147, 117], [21, 73, 45, 7, 74, 46], [1, 53, 23, 37, 54, 24], [19, 45, 15, 26, 46, 16], [5, 145, 115, 10, 146, 116], [19, 75, 47, 10, 76, 48], [15, 54, 24, 25, 55, 25], [23, 45, 15, 25, 46, 16], [13, 145, 115, 3, 146, 116], [2, 74, 46, 29, 75, 47], [42, 54, 24, 1, 55, 25], [23, 45, 15, 28, 46, 16], [17, 145, 115], [10, 74, 46, 23, 75, 47], [10, 54, 24, 35, 55, 25], [19, 45, 15, 35, 46, 16], [17, 145, 115, 1, 146, 116], [14, 74, 46, 21, 75, 47], [29, 54, 24, 19, 55, 25], [11, 45, 15, 46, 46, 16], [13, 145, 115, 6, 146, 116], [14, 74, 46, 23, 75, 47], [44, 54, 24, 7, 55, 25], [59, 46, 16, 1, 47, 17], [12, 151, 121, 7, 152, 122], [12, 75, 47, 26, 76, 48], [39, 54, 24, 14, 55, 25], [22, 45, 15, 41, 46, 16], [6, 151, 121, 14, 152, 122], [6, 75, 47, 34, 76, 48], [46, 54, 24, 10, 55, 25], [2, 45, 15, 64, 46, 16], [17, 152, 122, 4, 153, 123], [29, 74, 46, 14, 75, 47], [49, 54, 24, 10, 55, 25], [24, 45, 15, 46, 46, 16], [4, 152, 122, 18, 153, 123], [13, 74, 46, 32, 75, 47], [48, 54, 24, 14, 55, 25], [42, 45, 15, 32, 46, 16], [20, 147, 117, 4, 148, 118], [40, 75, 47, 7, 76, 48], [43, 54, 24, 22, 55, 25], [10, 45, 15, 67, 46, 16], [19, 148, 118, 6, 149, 119], [18, 75, 47, 31, 76, 48], [34, 54, 24, 34, 55, 25], [20, 45, 15, 61, 46, 16]];
+            j.getRSBlocks = function (a, b) { var c = j.getRsBlockTable(a, b); if (void 0 == c) throw new Error("bad rs block"); for (var d = c.length / 3, e = [], f = 0; d > f; f++)for (var g = c[3 * f + 0], h = c[3 * f + 1], i = c[3 * f + 2], k = 0; g > k; k++)e.push(new j(h, i)); return e };
+            j.getRsBlockTable = function (a, b) { switch (b) { case d.L: return j.RS_BLOCK_TABLE[4 * (a - 1) + 0]; case d.M: return j.RS_BLOCK_TABLE[4 * (a - 1) + 1]; case d.Q: return j.RS_BLOCK_TABLE[4 * (a - 1) + 2]; case d.H: return j.RS_BLOCK_TABLE[4 * (a - 1) + 3]; default: return void 0 } };
+            k.prototype = { get: function (a) { var b = Math.floor(a / 8); return 1 == (1 & this.buffer[b] >>> 7 - a % 8) }, put: function (a, b) { for (var c = 0; b > c; c++)this.putBit(1 == (1 & a >>> b - c - 1)) }, getLengthInBits: function () { return this.length }, putBit: function (a) { var b = Math.floor(this.length / 8); this.buffer.length <= b && this.buffer.push(0), a && (this.buffer[b] |= 128 >>> this.length % 8), this.length++ } };
+            var l = [[17, 14, 11, 7], [32, 26, 20, 14], [53, 42, 32, 24], [78, 62, 46, 34], [106, 84, 60, 44], [134, 106, 74, 58], [154, 122, 86, 64], [192, 152, 108, 84], [230, 180, 130, 98], [271, 213, 151, 119], [321, 251, 177, 137], [367, 287, 203, 155], [425, 331, 241, 177], [458, 362, 258, 194], [520, 412, 292, 220], [586, 450, 322, 250], [644, 504, 364, 280], [718, 560, 394, 310], [792, 624, 442, 338], [858, 666, 482, 382], [929, 711, 509, 403], [1003, 779, 565, 439], [1091, 857, 611, 461], [1171, 911, 661, 511], [1273, 997, 715, 535], [1367, 1059, 751, 593], [1465, 1125, 805, 625], [1528, 1190, 868, 658], [1628, 1264, 908, 698], [1732, 1370, 982, 742], [1840, 1452, 1030, 790], [1952, 1538, 1112, 842], [2068, 1628, 1168, 898], [2188, 1722, 1228, 958], [2303, 1809, 1283, 983], [2431, 1911, 1351, 1051], [2563, 1989, 1423, 1093], [2699, 2099, 1499, 1139], [2809, 2213, 1579, 1219], [2953, 2331, 1663, 1273]];
+
+            var FastCanvasDrawing = function (el, htOption) {
+                this._el = el;
+                this._htOption = htOption;
+                this._elCanvas = document.createElement("canvas");
+                this._elCanvas.width = htOption.width;
+                this._elCanvas.height = htOption.height;
+                el.innerHTML = "";
+                el.appendChild(this._elCanvas);
+                this._ctx = this._elCanvas.getContext("2d", { alpha: false });
+            };
+            FastCanvasDrawing.prototype.draw = function (qr) {
+                var ctx = this._ctx;
+                var opt = this._htOption;
+                var count = qr.getModuleCount();
+                var size = opt.width;
+                ctx.fillStyle = opt.colorLight;
+                ctx.fillRect(0, 0, size, size);
+                ctx.fillStyle = opt.colorDark;
+                var cell = size / count;
+                for (var r = 0; r < count; r++) {
+                    var y = Math.floor(r * cell);
+                    var h = Math.ceil((r + 1) * cell) - y;
+                    for (var c = 0; c < count; c++) {
+                        if (qr.isDark(r, c)) {
+                            var x = Math.floor(c * cell);
+                            var w = Math.ceil((c + 1) * cell) - x;
+                            ctx.fillRect(x, y, w, h);
+                        }
+                    }
+                }
+            };
+            FastCanvasDrawing.prototype.clear = function () {
+                this._ctx.clearRect(0, 0, this._elCanvas.width, this._elCanvas.height);
+            };
+
+            QRCode = function (el, opt) {
+                this._htOption = { width: 600, height: 600, colorDark: "#000000", colorLight: "#ffffff", correctLevel: d.L };
+                if (opt) for (var i in opt) this._htOption[i] = opt[i];
+                if (typeof el === "string") el = document.getElementById(el);
+                this._el = el;
+                this._oDrawing = new FastCanvasDrawing(this._el, this._htOption);
+            };
+            QRCode.prototype.makeCode = function (text) {
+                var oQR = new b(r(text, this._htOption.correctLevel), this._htOption.correctLevel);
+                oQR.addData(text);
+                oQR.make();
+                this._oDrawing.draw(oQR);
+            };
+            QRCode.CorrectLevel = d;
+        }();
+
+        // =========================================================================
+        // 2. EMPAQUETADO BINARIO 8-BIT (4-BYTE HEADER + Z85) Y CÓDIGOS FOUNTAIN (LT XOR)
+        // =========================================================================
+        const Z85_ENC = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#";
+        const Z85_DEC = new Uint8Array(256);
+        for (let i = 0; i < Z85_ENC.length; i++) {
+            Z85_DEC[Z85_ENC.charCodeAt(i)] = i;
+        }
+
+        function encodeBytesToZ85(u8) {
+            const pad = (4 - (u8.length % 4)) % 4;
+            const buf = new Uint8Array(u8.length + pad);
+            buf.set(u8);
+            let out = "";
+            for (let i = 0; i < buf.length; i += 4) {
+                let v = ((buf[i] << 24) | (buf[i + 1] << 16) | (buf[i + 2] << 8) | buf[i + 3]) >>> 0;
+                const c4 = v % 85; v = Math.floor(v / 85);
+                const c3 = v % 85; v = Math.floor(v / 85);
+                const c2 = v % 85; v = Math.floor(v / 85);
+                const c1 = v % 85; v = Math.floor(v / 85);
+                const c0 = v % 85;
+                out += Z85_ENC[c0] + Z85_ENC[c1] + Z85_ENC[c2] + Z85_ENC[c3] + Z85_ENC[c4];
+            }
+            return out;
+        }
+
+        function decodeZ85ToBytes(str, exactByteLen) {
+            const groups = Math.floor(str.length / 5);
+            const out = new Uint8Array(groups * 4);
+            let outIdx = 0;
+            for (let i = 0; i < groups * 5; i += 5) {
+                const v = (
+                    Z85_DEC[str.charCodeAt(i)] * 52200625 +
+                    Z85_DEC[str.charCodeAt(i + 1)] * 614125 +
+                    Z85_DEC[str.charCodeAt(i + 2)] * 7225 +
+                    Z85_DEC[str.charCodeAt(i + 3)] * 85 +
+                    Z85_DEC[str.charCodeAt(i + 4)]
+                ) >>> 0;
+                out[outIdx++] = (v >>> 24) & 0xff;
+                out[outIdx++] = (v >>> 16) & 0xff;
+                out[outIdx++] = (v >>> 8) & 0xff;
+                out[outIdx++] = v & 0xff;
+            }
+            return exactByteLen !== undefined ? out.subarray(0, exactByteLen) : out;
+        }
+
+        // Empaqueta un encabezado binario de 4 bytes [id_hi, id_lo, lenFlags_hi, lenFlags_lo] seguido del payload binario puro
+        function packBinaryDroplet(dropletId, sliceBytes, isFountainParity = false) {
+            const len = sliceBytes.byteLength;
+            const flagsAndLen = (isFountainParity ? 0x8000 : 0x0000) | (len & 0x7FFF);
+            const frame = new Uint8Array(4 + len);
+            frame[0] = (dropletId >>> 8) & 0xff;
+            frame[1] = dropletId & 0xff;
+            frame[2] = (flagsAndLen >>> 8) & 0xff;
+            frame[3] = flagsAndLen & 0xff;
+            frame.set(sliceBytes, 4);
+            return "~" + encodeBytesToZ85(frame);
+        }
+
+        // PRNG determinista Mulberry32 idéntico al del Receptor para Códigos Fountain (LT XOR)
+        function mulberry32(seed) {
+            let a = seed >>> 0;
+            return function () {
+                let t = a += 0x6D2B79F5;
+                t = Math.imul(t ^ (t >>> 15), t | 1);
+                t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+                return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+            };
+        }
+
+        function getFountainRecipe(dropletId, totalChunks) {
+            const rng = mulberry32(dropletId);
+            const r = rng();
+            let degree = 2;
+            if (r < 0.50) degree = 2;
+            else if (r < 0.75) degree = 3;
+            else if (r < 0.90) degree = 4;
+            else degree = 6;
+
+            degree = Math.min(degree, totalChunks);
+            const chosen = new Set();
+            while (chosen.size < degree) {
+                chosen.add(Math.floor(rng() * totalChunks));
+            }
+            return Array.from(chosen);
+        }
+
+        function generateFountainParityFrame(seed) {
+            const recipe = getFountainRecipe(seed, sys.totalChunks);
+            const xorBuf = new Uint8Array(sys.mtu);
+            for (const idx of recipe) {
+                const src = sys.rawSlices[idx];
+                if (src) {
+                    for (let b = 0; b < src.length; b++) {
+                        xorBuf[b] ^= src[b];
+                    }
+                }
+            }
+            return {
+                payload: packBinaryDroplet(seed, xorBuf, true),
+                recipe
+            };
+        }
+
+        // =========================================================================
+        // 3. ESTADO DEL SISTEMA EMISOR SAINTER V4.5
+        // =========================================================================
+        const sys = {
+            sourceBlob: null,
+            sourceName: "",
+            mtu: 500,
+            fps: 12,
+            txMode: 'full', // 'full' | 'fountain' | 'priority'
+            headerPayload: "",
+            rawSlices: [],
+            chunksPayloads: [],
+            totalChunks: 0,
+            fountainSeed: 10000,
+            activeIndices: [],
+            activeSet: new Set(),
+            activeIdx: 0,
+            tickCount: 0,
+            pulseToggle: false,
+            qr: null,
+            timer: null,
+            running: false,
+            ackScanner: null,
+            zenIdleTimer: null,
+            isPaintingHeatmap: false,
+            paintAction: true,
+            // Selección Rectangular 2D
+            rectMode: 'replace',
+            isDraggingRect: false,
+            rectStart: null,
+            rectCurrent: null,
+            // Módem Acústico Bidireccional y Escucha Pasiva Continua
+            audioListening: false,
+            audioCtx: null,
+            audioStream: null,
+            analyser: null,
+            fftLoopId: null,
+            isEmittingTone: false,
+            acousticPhase: 0,
+            rxRleBuffer: "",
+            lastDecodedSymbol: null,
+            lastSymbolChar: "",
+            candidateSymbol: null,
+            candidateHits: 0,
+            silenceFrames: 0,
+            rxSessionTimeout: null
+        };
+
+        // --- DRAG & DROP GLOBAL EN TODA LA VENTANA ---
+        let dragCounter = 0;
+        const dropOverlay = document.getElementById('global-drop-overlay');
+
+        window.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            dragCounter++;
+            if (e.dataTransfer && e.dataTransfer.types && e.dataTransfer.types.includes('Files')) {
+                dropOverlay.classList.add('active');
+            }
+        });
+
+        window.addEventListener('dragover', (e) => e.preventDefault());
+
+        window.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dragCounter--;
+            if (dragCounter <= 0) {
+                dragCounter = 0;
+                dropOverlay.classList.remove('active');
+            }
+        });
+
+        window.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dragCounter = 0;
+            dropOverlay.classList.remove('active');
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const f = e.dataTransfer.files[0];
+                changeInput('file');
+                handleBuffer(f, f.name);
+            }
+        });
+
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleBuffer(e.target.files[0], e.target.files[0].name);
+            }
+        });
+
+        // --- ATAJOS DE TECLADO GLOBALES ---
+        window.addEventListener('keydown', (e) => {
+            const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+            if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+
+            if (e.code === 'Space') {
+                e.preventDefault();
+                togglePlay();
+            } else if (e.code === 'ArrowLeft') {
+                e.preventDefault();
+                stepFrame(-1);
+            } else if (e.code === 'ArrowRight') {
+                e.preventDefault();
+                stepFrame(1);
+            } else if (e.key === '[') {
+                e.preventDefault();
+                shiftActiveQueue(-1);
+            } else if (e.key === ']') {
+                e.preventDefault();
+                shiftActiveQueue(1);
+            } else if (e.code === 'KeyZ' || e.code === 'KeyF') {
+                e.preventDefault();
+                toggleZen();
+            } else if (e.code === 'KeyA') {
+                e.preventDefault();
+                const modalOpen = document.getElementById('ack-modal').classList.contains('open');
+                if (modalOpen) closeAckScanner();
+                else openAckScanner();
+            }
+        });
+
+        function changeInput(m) {
+            document.getElementById('btn-mode-f').classList.toggle('active', m === 'file');
+            document.getElementById('btn-mode-t').classList.toggle('active', m === 'text');
+            document.getElementById('area-file').style.display = m === 'file' ? 'flex' : 'none';
+            document.getElementById('area-text-wrap').style.display = m === 'text' ? 'flex' : 'none';
+            if (m === 'text') document.getElementById('area-text').focus();
+        }
+
+        function injectText() {
+            const val = document.getElementById('area-text').value;
+            if (val.trim().length > 0) {
+                handleBuffer(new Blob([val], { type: 'text/plain' }), "PAYLOAD_TEXTO.txt");
+            } else {
+                alert("Introduce texto antes de procesar.");
+            }
+        }
+
+        function setMTU(bytes) {
+            sys.mtu = bytes;
+            document.getElementById('mtu-250').classList.toggle('active', bytes === 250);
+            document.getElementById('mtu-500').classList.toggle('active', bytes === 500);
+            document.getElementById('mtu-700').classList.toggle('active', bytes === 700);
+            const names = { 250: "250 Bytes (Resiliente)", 500: "500 Bytes (Óptimo 8-Bit)", 700: "700 Bytes (Alta Densidad)" };
+            document.getElementById('mtu-lbl').innerText = names[bytes] || (bytes + " Bytes");
+            reprocessCurrentSource();
+        }
+
+        function reprocessCurrentSource() {
+            if (sys.sourceBlob) {
+                handleBuffer(sys.sourceBlob, sys.sourceName);
+            }
+        }
+
+        async function compressGzip(uint8Data) {
+            if (typeof CompressionStream === 'undefined') return { data: uint8Data, compressed: 0 };
+            try {
+                const cs = new CompressionStream('gzip');
+                const writer = cs.writable.getWriter();
+                writer.write(uint8Data);
+                writer.close();
+                const compressedBuf = await new Response(cs.readable).arrayBuffer();
+                const compressedU8 = new Uint8Array(compressedBuf);
+                if (compressedU8.byteLength < uint8Data.byteLength) {
+                    return { data: compressedU8, compressed: 1 };
+                }
+                return { data: uint8Data, compressed: 0 };
+            } catch (e) {
+                return { data: uint8Data, compressed: 0 };
+            }
+        }
+
+        function formatBytes(b) {
+            if (b < 1024) return b + " B";
+            if (b < 1048576) return (b / 1024).toFixed(2) + " KB";
+            return (b / 1048576).toFixed(2) + " MB";
+        }
+
+        function indicesToRangesString(indicesArr) {
+            if (!indicesArr || indicesArr.length === 0) return "";
+            const sorted = Array.from(new Set(indicesArr)).sort((a, b) => a - b);
+            const ranges = [];
+            let start = sorted[0], prev = sorted[0];
+            for (let i = 1; i <= sorted.length; i++) {
+                if (sorted[i] === prev + 1) {
+                    prev = sorted[i];
+                } else {
+                    ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+                    start = sorted[i];
+                    prev = sorted[i];
+                }
+            }
+            return ranges.join(', ');
+        }
+
+        function syncCustomFramesInput() {
+            const input = document.getElementById('custom-frames');
+            if (sys.txMode === 'full' || sys.txMode === 'fountain' || sys.activeIndices.length === sys.totalChunks) {
+                input.value = "";
+            } else {
+                const rle = indicesToRangesString(sys.activeIndices);
+                input.value = rle.length <= 120 ? rle : `[${sys.activeIndices.length} bloques activos: ${rle.substring(0, 85)}...]`;
+            }
+        }
+
+        async function handleBuffer(blob, filename) {
+            if (sys.running) togglePlay();
+
+            if (blob.size === 0) {
+                alert("El archivo o texto está vacío.");
+                return;
+            }
+
+            sys.sourceBlob = blob;
+            sys.sourceName = filename;
+
+            const loader = document.getElementById('async-loader');
+            const loaderLbl = document.getElementById('async-loader-lbl');
+            loader.classList.add('active');
+            loaderLbl.innerText = "Calculando firma criptográfica SHA-256...";
+            document.getElementById('status').innerText = "● PROCESANDO...";
+
+            await new Promise(r => setTimeout(r, 25));
+
+            try {
+                const origBuf = await blob.arrayBuffer();
+                const origU8 = new Uint8Array(origBuf);
+
+                const hashArr = await crypto.subtle.digest('SHA-256', origBuf);
+                const hash = Array.from(new Uint8Array(hashArr))
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join('').substring(0, 12);
+
+                const useComp = document.getElementById('chk-gzip').checked;
+                let finalU8 = origU8;
+                let compFlag = 0;
+
+                if (useComp) {
+                    loaderLbl.innerText = "Comprimiendo flujo estructurado...";
+                    await new Promise(r => setTimeout(r, 20));
+                    const res = await compressGzip(origU8);
+                    finalU8 = res.data;
+                    compFlag = res.compressed;
+                }
+
+                loaderLbl.innerText = "Empaquetando tramas binarias 8-bit con encabezado de 4 bytes...";
+                await new Promise(r => setTimeout(r, 15));
+
+                const ratio = ((1 - finalU8.byteLength / origU8.byteLength) * 100).toFixed(1);
+                document.getElementById('comp-badge').innerText = compFlag
+                    ? `8-BIT + COMP (-${ratio}%)`
+                    : `8-BIT DIRECTO`;
+
+                const total = Math.ceil(finalU8.byteLength / sys.mtu);
+                sys.totalChunks = total;
+                sys.fountainSeed = Math.max(total + 100, 10000);
+
+                sys.headerPayload = JSON.stringify({
+                    t: "H",
+                    c: total,
+                    m: sys.mtu,
+                    cl: finalU8.byteLength,
+                    n: filename,
+                    h: hash,
+                    s: origU8.byteLength,
+                    z: compFlag
+                });
+
+                sys.rawSlices = new Array(total);
+                sys.chunksPayloads = new Array(total);
+                for (let i = 0; i < total; i++) {
+                    const slice = finalU8.subarray(i * sys.mtu, (i + 1) * sys.mtu);
+                    sys.rawSlices[i] = slice;
+                    sys.chunksPayloads[i] = packBinaryDroplet(i, slice, false);
+                }
+
+                document.getElementById('mt-name').innerText = filename;
+                document.getElementById('mt-size').innerText = formatBytes(origU8.byteLength);
+                document.getElementById('mt-comp').innerText = formatBytes(finalU8.byteLength);
+                document.getElementById('mt-chunks').innerText = total;
+                document.getElementById('mt-hash').innerText = hash;
+
+                sys.qr = new QRCode(document.getElementById("qr-canvas-mount"), {
+                    width: 640,
+                    height: 640,
+                    correctLevel: QRCode.CorrectLevel.L
+                });
+
+                sys.activeIndices = Array.from({ length: total }, (_, i) => i);
+                sys.activeSet = new Set(sys.activeIndices);
+                sys.activeIdx = 0;
+                sys.tickCount = 0;
+                setTxMode('full', true);
+
+                ['run-btn', 'btn-rewind', 'btn-prev', 'btn-next', 'btn-zen', 'btn-scan-ack', 'timeline-scrubber'].forEach(id => {
+                    document.getElementById(id).disabled = false;
+                });
+
+                updateTimelineBounds();
+                renderHeaderFrame();
+                document.getElementById('status').innerText = "● PAYLOAD 8-BIT LISTO";
+            } catch (err) {
+                console.error("Error procesando buffer:", err);
+                alert("Error al empaquetar datos: " + err.message);
+            } finally {
+                loader.classList.remove('active');
+            }
+        }
+
+        // =========================================================================
+        // 4. MATRIZ 2D GEMELA CON SELECCIÓN RECTANGULAR VISUAL (MARQUEE BOX SELECT)
+        // =========================================================================
+        function getGridGeometry() {
+            const total = Math.max(1, sys.totalChunks || 100);
+            const cols = Math.ceil(Math.sqrt(total * 1.6));
+            const rows = Math.ceil(total / cols);
+            return { total, cols, rows };
+        }
+
+        function setRectSelectMode(mode) {
+            if (mode === 'all') {
+                document.getElementById('rect-mode-replace').classList.remove('active');
+                document.getElementById('rect-mode-add').classList.remove('active');
+                document.getElementById('rect-mode-sub').classList.remove('active');
+                const btnAll = document.getElementById('rect-mode-all');
+                if (btnAll) btnAll.classList.add('active');
+
+                if (sys.totalChunks > 0) {
+                    sys.activeIndices = Array.from({ length: sys.totalChunks }, (_, i) => i);
+                    sys.activeSet = new Set(sys.activeIndices);
+                    sys.activeIdx = 0;
+                    setTxMode('full', true);
+                    updateTimelineBounds();
+                    syncCustomFramesInput();
+                    renderCurrentActiveFrame();
+                    document.getElementById('status').innerText = `● MATRIZ 2D COMPLETA SELECCIONADA (${sys.totalChunks} BLKS)`;
+                }
+                return;
+            }
+
+            sys.rectMode = mode;
+            document.getElementById('rect-mode-replace').classList.toggle('active', mode === 'replace');
+            document.getElementById('rect-mode-add').classList.toggle('active', mode === 'add');
+            document.getElementById('rect-mode-sub').classList.toggle('active', mode === 'sub');
+            const btnAll = document.getElementById('rect-mode-all');
+            if (btnAll) btnAll.classList.remove('active');
+        }
+
+        function draw2DGridSelector() {
+            const canvas = document.getElementById('grid-2d-selector');
+            if (!canvas) return;
+            const dpr = window.devicePixelRatio || 1;
+            const w = (canvas.clientWidth || 440) * dpr;
+            const h = (canvas.clientHeight || 155) * dpr;
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+            }
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, w, h);
+
+            const { total, cols, rows } = getGridGeometry();
+            const cellW = w / cols;
+            const cellH = h / rows;
+            const pad = total > 2500 ? 0 : 0.5;
+            const currentChunk = sys.activeIndices.length > 0 ? sys.activeIndices[sys.activeIdx] : -1;
+
+            for (let i = 0; i < total; i++) {
+                const c = i % cols;
+                const r = Math.floor(i / cols);
+                const x = c * cellW;
+                const y = r * cellH;
+                const isActive = sys.totalChunks > 0 ? sys.activeSet.has(i) : false;
+
+                if (i === currentChunk) {
+                    ctx.fillStyle = '#ffffff';
+                } else if (sys.txMode === 'priority') {
+                    ctx.fillStyle = isActive ? '#ff9e00' : '#0b381a';
+                } else if (sys.txMode === 'fountain') {
+                    ctx.fillStyle = '#2f81f7';
+                } else {
+                    ctx.fillStyle = isActive ? '#00b82d' : '#161b22';
+                }
+
+                ctx.fillRect(
+                    x + pad,
+                    y + pad,
+                    Math.max(1, cellW - pad * 2),
+                    Math.max(1, cellH - pad * 2)
+                );
+            }
+
+            ctx.strokeStyle = 'rgba(47, 129, 247, 0.32)';
+            ctx.lineWidth = 1;
+            for (let g = 1; g < 4; g++) {
+                const gx = (w / 4) * g;
+                const gy = (h / 4) * g;
+                ctx.beginPath();
+                ctx.moveTo(gx, 0);
+                ctx.lineTo(gx, h);
+                ctx.moveTo(0, gy);
+                ctx.lineTo(w, gy);
+                ctx.stroke();
+            }
+
+            if (sys.isDraggingRect && sys.rectStart && sys.rectCurrent) {
+                const x1 = Math.min(sys.rectStart.x, sys.rectCurrent.x) * dpr;
+                const y1 = Math.min(sys.rectStart.y, sys.rectCurrent.y) * dpr;
+                const rw = Math.abs(sys.rectCurrent.x - sys.rectStart.x) * dpr;
+                const rh = Math.abs(sys.rectCurrent.y - sys.rectStart.y) * dpr;
+
+                ctx.fillStyle = sys.rectMode === 'sub' ? 'rgba(248, 81, 73, 0.28)' : 'rgba(255, 158, 0, 0.30)';
+                ctx.fillRect(x1, y1, rw, rh);
+                ctx.strokeStyle = sys.rectMode === 'sub' ? '#f85149' : '#ffea00';
+                ctx.lineWidth = 2 * dpr;
+                ctx.strokeRect(x1, y1, rw, rh);
+            }
+        }
+
+        !function init2DRectangularSelector() {
+            const canvas = document.getElementById('grid-2d-selector');
+            const tooltip = document.getElementById('grid2d-tooltip');
+
+            function pointerToGridCoords(clientX, clientY) {
+                const rect = canvas.getBoundingClientRect();
+                const { cols, rows } = getGridGeometry();
+                const relX = Math.max(0, Math.min(rect.width - 0.01, clientX - rect.left));
+                const relY = Math.max(0, Math.min(rect.height - 0.01, clientY - rect.top));
+                const col = Math.floor((relX / rect.width) * cols);
+                const row = Math.floor((relY / rect.height) * rows);
+                return { col, row, x: relX, y: relY };
+            }
+
+            canvas.addEventListener('pointerdown', (e) => {
+                if (!sys.totalChunks) return;
+                canvas.setPointerCapture(e.pointerId);
+                sys.isDraggingRect = true;
+                sys.rectStart = pointerToGridCoords(e.clientX, e.clientY);
+                sys.rectCurrent = sys.rectStart;
+                draw2DGridSelector();
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
+                if (!sys.totalChunks) return;
+                const coords = pointerToGridCoords(e.clientX, e.clientY);
+                const { cols, total } = getGridGeometry();
+                const idx = Math.min(total - 1, coords.row * cols + coords.col);
+
+                tooltip.style.display = 'block';
+                if (sys.isDraggingRect && sys.rectStart) {
+                    sys.rectCurrent = coords;
+                    const c1 = Math.min(sys.rectStart.col, coords.col) + 1;
+                    const c2 = Math.max(sys.rectStart.col, coords.col) + 1;
+                    const r1 = Math.min(sys.rectStart.row, coords.row) + 1;
+                    const r2 = Math.max(sys.rectStart.row, coords.row) + 1;
+                    tooltip.innerText = `Rectángulo: Filas ${r1}-${r2}, Cols ${c1}-${c2}`;
+                    draw2DGridSelector();
+                } else {
+                    tooltip.innerText = `Fila ${coords.row + 1}, Col ${coords.col + 1} (Blk #${idx})`;
+                }
+            });
+
+            canvas.addEventListener('pointerup', (e) => {
+                if (!sys.isDraggingRect || !sys.rectStart || !sys.totalChunks) return;
+                sys.isDraggingRect = false;
+                const endCoords = pointerToGridCoords(e.clientX, e.clientY);
+                const { cols, total } = getGridGeometry();
+
+                const minCol = Math.min(sys.rectStart.col, endCoords.col);
+                const maxCol = Math.max(sys.rectStart.col, endCoords.col);
+                const minRow = Math.min(sys.rectStart.row, endCoords.row);
+                const maxRow = Math.max(sys.rectStart.row, endCoords.row);
+
+                let effectiveMode = sys.rectMode;
+                if (e.shiftKey || e.ctrlKey) effectiveMode = 'add';
+                if (e.altKey) effectiveMode = 'sub';
+
+                // Si fue un clic simple sin arrastrar rectángulo en modo 'replace', saltar el cursor a ese bloque en lugar de reducir la cola a 1 solo bloque
+                if (effectiveMode === 'replace' && minCol === maxCol && minRow === maxRow) {
+                    const clickedIdx = Math.min(total - 1, minRow * cols + minCol);
+                    const posInQueue = sys.activeIndices.indexOf(clickedIdx);
+                    if (posInQueue !== -1) {
+                        sys.activeIdx = posInQueue;
+                        updateTimelineBounds();
+                        renderCurrentActiveFrame();
+                        document.getElementById('status').innerText = `● CURSOR EN BLOQUE #${clickedIdx}`;
+                        return;
+                    }
+                }
+
+                const nextSet = (effectiveMode === 'replace') ? new Set() : new Set(sys.activeSet);
+
+                for (let r = minRow; r <= maxRow; r++) {
+                    for (let c = minCol; c <= maxCol; c++) {
+                        const idx = r * cols + c;
+                        if (idx >= 0 && idx < total) {
+                            if (effectiveMode === 'sub') {
+                                nextSet.delete(idx);
+                            } else {
+                                nextSet.add(idx);
+                            }
+                        }
+                    }
+                }
+
+                if (nextSet.size === 0) {
+                    nextSet.add(Math.min(total - 1, minRow * cols + minCol));
+                }
+
+                sys.activeIndices = Array.from(nextSet).sort((a, b) => a - b);
+                sys.activeIdx = 0;
+                setRectSelectMode(sys.rectMode || 'replace');
+                setTxMode('priority', true);
+                updateTimelineBounds();
+                syncCustomFramesInput();
+                renderCurrentActiveFrame();
+
+                if (!sys.running) {
+                    togglePlay();
+                }
+                document.getElementById('status').innerText = `● ÁREA 2D EN TRANSMISIÓN (${sys.activeIndices.length} BLKS)`;
+            });
+
+            canvas.addEventListener('pointerleave', () => {
+                if (!sys.isDraggingRect) tooltip.style.display = 'none';
+            });
+        }();
+
+        // =========================================================================
+        // 5. MÓDEM ACÚSTICO EN BANDA VOCAL HUMANA (680 Hz - 1880 Hz) + WATERFALL 2D
+        // =========================================================================
+        const ACOUSTIC_PROTOCOL = {
+            HELLO: 760,    // Tono de inicio en centro de banda vocal (Celular -> Laptop)
+            READY: 1960,   // Reservado
+            REPEAT: 840,   // Separador de símbolo repetido
+            FREQ_TO_CHAR: [
+                { f: 680, ch: 'S' },
+                { f: 920, ch: '0' },
+                { f: 1000, ch: '1' },
+                { f: 1080, ch: '2' },
+                { f: 1160, ch: '3' },
+                { f: 1240, ch: '4' },
+                { f: 1320, ch: '5' },
+                { f: 1400, ch: '6' },
+                { f: 1480, ch: '7' },
+                { f: 1560, ch: '8' },
+                { f: 1640, ch: '9' },
+                { f: 1720, ch: '-' },
+                { f: 1800, ch: ',' }
+            ],
+            EOF: 1880,
+            ACK_OK: 2040,
+            FIN_100: 2120,
+            TOLERANCE_HZ: 42
+        };
+
+        sys.micGainLevel = 1.8;
+        sys.micGainNode = null;
+        sys.selectedMicId = "";
+        sys.audioStartPending = false;
+        sys.loopbackTesting = false;
+        const offlineAudioCapture = {
+            stream: null,
+            recorder: null,
+            chunks: [],
+            buffer: null,
+            requesting: false,
+            recording: false,
+            requestId: 0,
+            pendingRequest: null,
+            stopWaiter: null,
+            stopPromise: null
+        };
+
+        // Buffer offscreen para el Espectrograma Waterfall (Cascada 2D en tiempo real)
+        const waterfallCanvas = document.createElement('canvas');
+        waterfallCanvas.width = 240;
+        waterfallCanvas.height = 46;
+        const waterfallCtx = waterfallCanvas.getContext('2d');
+
+        function setSenderAcousticPhaseUI(phase, extraText = "") {
+            sys.acousticPhase = phase;
+            const p1 = document.getElementById('snd-phase-1');
+            const p2 = document.getElementById('snd-phase-2');
+            const p3 = document.getElementById('snd-phase-3');
+            const p2Txt = document.getElementById('snd-phase-2-txt');
+            const liveBuf = document.getElementById('rx-live-buffer');
+
+            if (phase === 0) {
+                [p1, p2, p3].forEach(el => el.className = 'sync-phase-row');
+                p2Txt.innerText = 'Fase 2: «Transmitiendo bloques faltantes...»';
+                return;
+            }
+
+            p1.className = 'sync-phase-row ' + (phase === 1 ? 'current' : (phase > 1 ? 'done' : ''));
+            p2.className = 'sync-phase-row ' + (phase === 2 ? 'current' : (phase > 2 ? 'done' : ''));
+            p3.className = 'sync-phase-row ' + (phase === 3 ? 'done current' : '');
+
+            if (phase === 1) {
+                if (liveBuf) liveBuf.innerText = "HANDSHAKE [HELLO 760Hz DETECTADO]...";
+            } else if (phase === 2 && extraText) {
+                p2Txt.innerText = `Fase 2: «Transmitiendo bloques faltantes...» (${extraText})`;
+                if (liveBuf) liveBuf.innerText = extraText;
+            } else if (phase !== 2) {
+                p2Txt.innerText = 'Fase 2: «Transmitiendo bloques faltantes...»';
+            }
+        }
+
+        function emitLaptopTone(freq, durationMs = 200, suppressRx = true) {
+            return new Promise((resolve) => {
+                if (!sys.audioCtx) {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    sys.audioCtx = new AudioContextClass();
+                }
+                if (sys.audioCtx.state === 'suspended') {
+                    sys.audioCtx.resume();
+                }
+
+                if (suppressRx) sys.isEmittingTone = true;
+                const now = sys.audioCtx.currentTime + 0.01;
+                const durSec = durationMs / 1000;
+
+                const osc = sys.audioCtx.createOscillator();
+                const gain = sys.audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now);
+
+                gain.gain.setValueAtTime(0.001, now);
+                gain.gain.linearRampToValueAtTime(0.45, now + 0.012);
+                gain.gain.setValueAtTime(0.45, now + Math.max(0.018, durSec - 0.012));
+                gain.gain.linearRampToValueAtTime(0.001, now + durSec);
+
+                osc.connect(gain);
+                gain.connect(sys.audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + durSec);
+
+                setTimeout(() => {
+                    if (suppressRx) sys.isEmittingTone = false;
+                    resolve();
+                }, durationMs + 25);
+            });
+        }
+
+        async function populateMicrophoneDevices() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const mics = devices.filter(d => d.kind === 'audioinput');
+                const sel = document.getElementById('mic-select');
+                if (!sel || mics.length === 0) return;
+
+                const currentVal = sys.selectedMicId || sel.value;
+                sel.innerHTML = '';
+                mics.forEach((m, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = m.deviceId;
+                    opt.text = m.label || `🎙️ Micrófono #${idx + 1}`;
+                    sel.appendChild(opt);
+                });
+                if (currentVal && Array.from(sel.options).some(o => o.value === currentVal)) {
+                    sel.value = currentVal;
+                }
+            } catch (e) { }
+        }
+
+        async function switchMicrophoneDevice(deviceId) {
+            sys.selectedMicId = deviceId;
+            stopAcousticListener();
+            await ensurePassiveAcousticListener(true);
+        }
+
+        function cycleMicGain() {
+            const levels = [1.8, 3.5, 6.0, 9.0];
+            const idx = (levels.indexOf(sys.micGainLevel) + 1) % levels.length;
+            sys.micGainLevel = levels[idx];
+            if (sys.micGainNode && sys.audioCtx) {
+                sys.micGainNode.gain.setValueAtTime(sys.micGainLevel, sys.audioCtx.currentTime);
+            }
+            const btn = document.getElementById('btn-mic-gain');
+            if (btn) btn.innerText = `🎚️ Gain: ${sys.micGainLevel.toFixed(1)}x`;
+        }
+
+        async function switchRecoveryTab(tabName) {
+            document.getElementById('tab-btn-optical').classList.toggle('active', tabName === 'optical');
+            document.getElementById('tab-btn-csv').classList.toggle('active', tabName === 'csv');
+            document.getElementById('tab-btn-acoustic').classList.toggle('active', tabName === 'acoustic');
+            document.getElementById('tab-btn-voice').classList.toggle('active', tabName === 'voice');
+
+            document.getElementById('pane-optical').classList.toggle('active', tabName === 'optical');
+            document.getElementById('pane-csv').classList.toggle('active', tabName === 'csv');
+            document.getElementById('pane-acoustic').classList.toggle('active', tabName === 'acoustic');
+            document.getElementById('pane-voice').classList.toggle('active', tabName === 'voice');
+
+            if (tabName !== 'acoustic' && sys.audioListening) {
+                stopAcousticListener();
+                document.getElementById('btn-audio-listen').classList.remove('listening');
+                document.getElementById('btn-audio-listen').innerText = "🎙️ COMENZAR A ESCUCHAR";
+                document.getElementById('fft-freq-lbl').innerText = "APAGADO";
+                drawStandbySpectrogram();
+            }
+            let offlineStop;
+            if (tabName !== 'voice' && (offlineAudioCapture.requesting || offlineAudioCapture.recording)) {
+                offlineStop = stopOfflineRecording();
+            }
+            if (offlineStop) await offlineStop;
+            if (tabName === 'acoustic' && !sys.audioListening) {
+                if (document.getElementById('pane-acoustic').classList.contains('active')) {
+                    await ensurePassiveAcousticListener(true);
+                }
+            }
+        }
+
+        function stopOfflineRecording() {
+            const capture = offlineAudioCapture;
+            capture.requestId++;
+            offlineAudioCapture.requesting = false;
+            if (capture.recorder && capture.recording) {
+                const button = document.getElementById('btn-offline-record');
+                if (button) {
+                    button.disabled = true;
+                    button.innerText = "⏳ PROCESANDO GRABACIÓN...";
+                }
+                if (capture.stopPromise) return capture.stopPromise;
+                capture.stopPromise = new Promise(resolve => {
+                    capture.stopWaiter = () => {
+                        capture.stopWaiter = null;
+                        capture.stopPromise = null;
+                        resolve();
+                    };
+                });
+                if (capture.recorder.state === 'recording') capture.recorder.stop();
+                return capture.stopPromise;
+            }
+            if (capture.stream) {
+                capture.stream.getTracks().forEach(track => track.stop());
+                capture.stream = null;
+            }
+            capture.recording = false;
+            const button = document.getElementById('btn-offline-record');
+            if (button) {
+                button.disabled = false;
+                button.innerText = "🎙️ COMENZAR GRABACIÓN";
+            }
+            if (capture.pendingRequest) {
+                return capture.pendingRequest.then(() => undefined, () => undefined);
+            }
+            return Promise.resolve();
+        }
+
+        async function toggleOfflineRecording() {
+            const capture = offlineAudioCapture;
+            const button = document.getElementById('btn-offline-record');
+            const status = document.getElementById('offline-audio-status');
+            if (capture.recording && capture.recorder) {
+                if (capture.recorder.state === 'recording') capture.recorder.stop();
+                return;
+            }
+            if (capture.requesting || capture.recording) return;
+            if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+                status.innerText = "❌ Este navegador no permite grabar audio.";
+                return;
+            }
+
+            capture.requesting = true;
+            const requestId = ++capture.requestId;
+            capture.buffer = null;
+            capture.chunks = [];
+            document.getElementById('btn-offline-play').disabled = true;
+            document.getElementById('btn-offline-decode').disabled = true;
+            button.disabled = true;
+            button.innerText = "⏳ SOLICITANDO MICRÓFONO...";
+            status.style.color = "var(--warn)";
+            status.innerText = "Solicitando permiso para grabar la ráfaga...";
+
+            let pendingRequest = null;
+            try {
+                pendingRequest = navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    }
+                });
+                capture.pendingRequest = pendingRequest;
+                const stream = await pendingRequest;
+                if (requestId !== capture.requestId || !capture.requesting) {
+                    stream.getTracks().forEach(track => track.stop());
+                    if (capture.pendingRequest === pendingRequest) capture.pendingRequest = null;
+                    return;
+                }
+                capture.pendingRequest = null;
+                capture.stream = stream;
+
+                const recorder = new MediaRecorder(stream);
+                capture.recorder = recorder;
+                recorder.ondataavailable = event => {
+                    if (event.data.size > 0) capture.chunks.push(event.data);
+                };
+                recorder.onstop = async () => {
+                    capture.recording = false;
+                    capture.requesting = false;
+                    capture.recorder = null;
+                    capture.stream?.getTracks().forEach(track => track.stop());
+                    capture.stream = null;
+                    if (capture.stopWaiter) {
+                        const resolveStop = capture.stopWaiter;
+                        capture.stopWaiter = null;
+                        resolveStop();
+                    }
+                    button.disabled = true;
+                    button.innerText = "⏳ PROCESANDO GRABACIÓN...";
+                    status.innerText = "Preparando audio para reproducción y decodificación...";
+
+                    try {
+                        if (!capture.chunks.length) throw new Error("No se capturó audio.");
+                        const blob = new Blob(capture.chunks, {
+                            type: recorder.mimeType || capture.chunks[0].type || 'audio/webm'
+                        });
+                        const audioContext = getOfflineAudioContext();
+                        capture.buffer = await audioContext.decodeAudioData(await blob.arrayBuffer());
+                        drawOfflineWaveform(capture.buffer);
+                        document.getElementById('btn-offline-play').disabled = false;
+                        document.getElementById('btn-offline-decode').disabled = false;
+                        status.style.color = "var(--neon)";
+                        status.innerText = `✅ Grabación lista (${capture.buffer.duration.toFixed(1)} s).`;
+                    } catch (err) {
+                        capture.buffer = null;
+                        status.style.color = "var(--warn)";
+                        status.innerText = `❌ No se pudo procesar la grabación: ${err.message || err}`;
+                    } finally {
+                        button.disabled = false;
+                        button.innerText = "🎙️ COMENZAR GRABACIÓN";
+                    }
+                };
+
+                recorder.start(250);
+                capture.requesting = false;
+                capture.recording = true;
+                button.disabled = false;
+                button.innerText = "⏹️ DETENER Y PROCESAR";
+                status.innerText = "🔴 Grabando. Transmite ahora desde el celular y detén aquí al terminar.";
+            } catch (err) {
+                if (requestId !== capture.requestId) {
+                    if (capture.pendingRequest === pendingRequest) capture.pendingRequest = null;
+                    return;
+                }
+                capture.pendingRequest = null;
+                capture.requesting = false;
+                capture.recording = false;
+                capture.recorder = null;
+                capture.stream?.getTracks().forEach(track => track.stop());
+                capture.stream = null;
+                button.disabled = false;
+                button.innerText = "🎙️ COMENZAR GRABACIÓN";
+                status.style.color = "var(--warn)";
+                status.innerText = `❌ No se pudo grabar: ${err.message || err}`;
+            }
+        }
+
+        function getOfflineAudioContext() {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) throw new Error("Web Audio API no disponible.");
+            if (!sys.audioCtx) sys.audioCtx = new AudioContextClass();
+            return sys.audioCtx;
+        }
+
+        function drawOfflineWaveform(audioBuffer) {
+            const canvas = document.getElementById('offline-audio-waveform');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width = canvas.clientWidth || 320;
+            const height = canvas.height = canvas.clientHeight || 72;
+            const samples = audioBuffer.getChannelData(0);
+            const samplesPerPixel = Math.max(1, Math.floor(samples.length / width));
+
+            ctx.clearRect(0, 0, width, height);
+            ctx.fillStyle = '#02060d';
+            ctx.fillRect(0, 0, width, height);
+            ctx.strokeStyle = '#a371f7';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (let x = 0; x < width; x++) {
+                const start = x * samplesPerPixel;
+                const end = Math.min(samples.length, start + samplesPerPixel);
+                let min = 1;
+                let max = -1;
+                for (let i = start; i < end; i++) {
+                    min = Math.min(min, samples[i]);
+                    max = Math.max(max, samples[i]);
+                }
+                ctx.moveTo(x + 0.5, (1 + min) * height / 2);
+                ctx.lineTo(x + 0.5, (1 + max) * height / 2);
+            }
+            ctx.stroke();
+        }
+
+        async function playOfflineRecording() {
+            if (!offlineAudioCapture.buffer) return;
+            try {
+                const audioContext = getOfflineAudioContext();
+                if (audioContext.state === 'suspended') await audioContext.resume();
+                const source = audioContext.createBufferSource();
+                source.buffer = offlineAudioCapture.buffer;
+                source.connect(audioContext.destination);
+                source.start();
+            } catch (err) {
+                const status = document.getElementById('offline-audio-status');
+                status.style.color = "var(--warn)";
+                status.innerText = `❌ No se pudo reproducir: ${err.message || err}`;
+            }
+        }
+
+        function goertzelPower(frame, frequency, sampleRate) {
+            const omega = 2 * Math.PI * frequency / sampleRate;
+            const coefficient = 2 * Math.cos(omega);
+            let previous = 0;
+            let previous2 = 0;
+            for (let i = 0; i < frame.length; i++) {
+                const current = frame[i] + coefficient * previous - previous2;
+                previous2 = previous;
+                previous = current;
+            }
+            const power = previous * previous + previous2 * previous2 -
+                coefficient * previous * previous2;
+            return Math.max(0, power / (frame.length * frame.length));
+        }
+
+        function decodeOfflineSymbols(audioBuffer) {
+            const samples = audioBuffer.getChannelData(0);
+            const sampleRate = audioBuffer.sampleRate;
+            const windowSize = Math.floor(sampleRate * 0.045);
+            const hopSize = Math.max(1, Math.floor(sampleRate * 0.025));
+            const window = new Float32Array(windowSize);
+            for (let i = 0; i < windowSize; i++) {
+                window[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (windowSize - 1));
+            }
+
+            const candidates = [
+                { frequency: ACOUSTIC_PROTOCOL.HELLO, type: 'HELLO' },
+                { frequency: ACOUSTIC_PROTOCOL.REPEAT, type: 'REPEAT' },
+                { frequency: ACOUSTIC_PROTOCOL.EOF, type: 'EOF' },
+                ...ACOUSTIC_PROTOCOL.FREQ_TO_CHAR.map(item => ({
+                    frequency: item.f,
+                    type: 'DATA',
+                    ch: item.ch
+                }))
+            ];
+            const detections = [];
+            const frame = new Float32Array(windowSize);
+            const windowSeconds = windowSize / sampleRate;
+
+            for (let offset = 0; offset + windowSize <= samples.length; offset += hopSize) {
+                let mean = 0;
+                let squareSum = 0;
+                for (let i = 0; i < windowSize; i++) {
+                    const value = samples[offset + i];
+                    mean += value;
+                    squareSum += value * value;
+                }
+                mean /= windowSize;
+                const rms = Math.sqrt(Math.max(0, squareSum / windowSize - mean * mean));
+                if (rms < 0.003) continue;
+
+                for (let i = 0; i < windowSize; i++) {
+                    frame[i] = (samples[offset + i] - mean) * window[i];
+                }
+
+                let bestIndex = -1;
+                let bestPower = 0;
+                let secondPower = 0;
+                for (let i = 0; i < candidates.length; i++) {
+                    const power = goertzelPower(frame, candidates[i].frequency, sampleRate);
+                    if (power > bestPower) {
+                        secondPower = bestPower;
+                        bestPower = power;
+                        bestIndex = i;
+                    } else if (power > secondPower) {
+                        secondPower = power;
+                    }
+                }
+
+                if (bestIndex < 0 || bestPower < 1e-7 ||
+                    bestPower < rms * rms * 0.025 ||
+                    bestPower < Math.max(1e-9, secondPower) * 1.35) {
+                    continue;
+                }
+
+                const candidate = candidates[bestIndex];
+                detections.push({
+                    ...candidate,
+                    start: offset / sampleRate,
+                    end: offset / sampleRate + windowSeconds
+                });
+            }
+
+            const events = [];
+            let current = null;
+            for (const detection of detections) {
+                const sameSymbol = current &&
+                    current.type === detection.type &&
+                    current.ch === detection.ch;
+                if (sameSymbol && detection.start - current.end <= 0.085) {
+                    current.end = detection.end;
+                } else {
+                    if (current) events.push(current);
+                    current = { ...detection };
+                }
+            }
+            if (current) events.push(current);
+
+            const receptions = [];
+            let active = false;
+            let payload = '';
+            let lastChar = '';
+            const savePayload = () => {
+                if (payload.length > 0) receptions.push(payload);
+            };
+
+            for (const event of events) {
+                if (event.type === 'HELLO') {
+                    if (active) savePayload();
+                    active = true;
+                    payload = '';
+                    lastChar = '';
+                } else if (event.type === 'EOF') {
+                    if (active) savePayload();
+                    active = false;
+                    payload = '';
+                    lastChar = '';
+                } else if (active && event.type === 'REPEAT' && lastChar) {
+                    payload += lastChar;
+                } else if (active && event.type === 'DATA') {
+                    if (event.ch === 'S') payload = 'S';
+                    else payload += event.ch;
+                    lastChar = event.ch;
+                }
+            }
+            if (active) savePayload();
+
+            const validReceptions = sys.totalChunks
+                ? receptions.filter(value => parseMacroSectorsOrRanges(value, sys.totalChunks).length > 0)
+                : receptions;
+            return validReceptions.sort((a, b) => b.length - a.length)[0] || '';
+        }
+
+        function decodeOfflineBurst() {
+            const status = document.getElementById('offline-audio-status');
+            if (!offlineAudioCapture.buffer) {
+                status.innerText = "❌ Primero graba una ráfaga.";
+                return;
+            }
+
+            try {
+                const payload = decodeOfflineSymbols(offlineAudioCapture.buffer);
+                if (!payload) throw new Error("No se detectó una trama completa. Asegúrate de grabar ambas pasadas.");
+                document.getElementById('custom-frames').value = payload;
+                if (!sys.totalChunks) {
+                    status.style.color = "var(--warn)";
+                    status.innerText = `✅ Trama detectada: ${payload}. Carga el archivo para aplicar los bloques.`;
+                    return;
+                }
+                if (!processReverseAckPayload(payload)) {
+                    throw new Error("La trama recibida no contiene bloques válidos para este archivo.");
+                }
+                status.style.color = "var(--neon)";
+                status.innerText = `✅ Trama [${payload}] decodificada y aplicada (${sys.activeIndices.length} bloques).`;
+                if (!sys.running) togglePlay();
+            } catch (err) {
+                status.style.color = "var(--warn)";
+                status.innerText = `❌ ${err.message || err}`;
+            }
+        }
+
+        function drawStandbySpectrogram() {
+            const canvas = document.getElementById('audio-fft-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width = canvas.clientWidth || 340;
+            const h = canvas.height = canvas.clientHeight || 98;
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = 'rgba(47, 129, 247, 0.06)';
+            ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = '#79c0ff';
+            ctx.font = 'bold 11px Consolas, monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('🎙️ MICRÓFONO LISTO', w / 2, h / 2 - 5);
+            ctx.fillStyle = '#8b949e';
+            ctx.font = '10px Consolas, monospace';
+            ctx.fillText('Pulsa COMENZAR A ESCUCHAR para activar el micrófono', w / 2, h / 2 + 12);
+        }
+
+        async function forceActivateMicrophone() {
+            if (sys.audioCtx && sys.audioCtx.state === 'suspended') {
+                try { await sys.audioCtx.resume(); } catch (e) { }
+            }
+            if (!sys.audioListening || !sys.audioStream) {
+                await ensurePassiveAcousticListener(true);
+            }
+        }
+
+        async function ensurePassiveAcousticListener(forceRestart = false) {
+            const btn = document.getElementById('btn-audio-listen');
+            const lbl = document.getElementById('fft-freq-lbl');
+
+            if (sys.audioStartPending) return;
+            if (sys.audioListening && !forceRestart) {
+                if (sys.audioCtx && sys.audioCtx.state === 'suspended') {
+                    try { await sys.audioCtx.resume(); } catch (e) { }
+                }
+                btn.innerText = "🟢 ESCUCHANDO AL CELULAR... (Clic p/ Detener)";
+                return;
+            }
+
+            sys.audioStartPending = true;
+            btn.disabled = true;
+            btn.innerText = "⏳ SOLICITANDO PERMISO...";
+            lbl.innerText = "SOLICITANDO MICRÓFONO...";
+            try {
+                const audioConstraints = {
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                };
+                if (sys.selectedMicId) {
+                    audioConstraints.deviceId = { exact: sys.selectedMicId };
+                }
+
+                try {
+                    sys.audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+                } catch (constraintErr) {
+                    // Fallback si el driver de audio local en Windows rechaza constraints avanzadas
+                    sys.audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                }
+
+                await populateMicrophoneDevices();
+
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                if (!sys.audioCtx) sys.audioCtx = new AudioContextClass();
+                if (sys.audioCtx.state === 'suspended') {
+                    try { await sys.audioCtx.resume(); } catch (e) { }
+                }
+
+                const source = sys.audioCtx.createMediaStreamSource(sys.audioStream);
+                sys.micGainNode = sys.audioCtx.createGain();
+                sys.micGainNode.gain.value = sys.micGainLevel;
+
+                sys.analyser = sys.audioCtx.createAnalyser();
+                sys.analyser.fftSize = 4096;
+                sys.analyser.minDecibels = -96;
+                sys.analyser.maxDecibels = -22;
+                sys.analyser.smoothingTimeConstant = 0.12;
+
+                source.connect(sys.micGainNode);
+                sys.micGainNode.connect(sys.analyser);
+
+                sys.audioListening = true;
+                btn.classList.add('listening');
+                btn.innerText = "🟢 ESCUCHANDO AL CELULAR... (Clic p/ Detener)";
+                lbl.innerText = sys.audioCtx.state === 'running' ? "MIC ACTIVO" : "CLIC P/ DESBLOQUEAR AUDIO";
+                const liveBuf = document.getElementById('rx-live-buffer');
+                if (liveBuf) liveBuf.innerText = "ESPERANDO SONIDO...";
+
+                cancelAnimationFrame(sys.fftLoopId);
+                scanAcousticFFTLoop();
+            } catch (err) {
+                console.warn("Error accediendo al micrófono:", err);
+                sys.audioListening = false;
+                if (sys.audioStream) {
+                    sys.audioStream.getTracks().forEach(track => track.stop());
+                    sys.audioStream = null;
+                }
+                lbl.innerText = "⚠️ CLIC P/ ACTIVAR MIC";
+                btn.classList.remove('listening');
+                const canvas = document.getElementById('audio-fft-canvas');
+                if (canvas) {
+                    const ctx = canvas.getContext('2d');
+                    const w = canvas.width = canvas.clientWidth || 320;
+                    const h = canvas.height = canvas.clientHeight || 98;
+                    ctx.clearRect(0, 0, w, h);
+                    ctx.fillStyle = 'rgba(248, 81, 73, 0.14)';
+                    ctx.fillRect(0, 0, w, h);
+                    ctx.fillStyle = '#f85149';
+                    ctx.font = 'bold 11px Consolas, monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('⚠️ NO SE PUDO ACTIVAR EL MICRÓFONO', w / 2, h / 2 - 4);
+                    ctx.fillStyle = '#8b949e';
+                    ctx.font = '10px Consolas, monospace';
+                    ctx.fillText(err && err.name ? `(${err.name}: revisa permisos del navegador)` : '(Permiso requerido en archivo HTML local)', w / 2, h / 2 + 12);
+                }
+            } finally {
+                sys.audioStartPending = false;
+                btn.disabled = false;
+                btn.innerText = sys.audioListening
+                    ? "🟢 ESCUCHANDO AL CELULAR... (Clic p/ Detener)"
+                    : "🎙️ COMENZAR A ESCUCHAR";
+            }
+        }
+
+        async function toggleAcousticListener() {
+            const btn = document.getElementById('btn-audio-listen');
+            const lbl = document.getElementById('fft-freq-lbl');
+
+            // Si el navegador tenía el AudioContext suspendido (típico en páginas HTML locales file://),
+            // el primer clic del usuario lo desbloquea en lugar de apagar el micrófono
+            if (sys.audioListening && sys.audioCtx && sys.audioCtx.state === 'suspended') {
+                await sys.audioCtx.resume();
+                lbl.innerText = "MIC ACTIVO";
+                btn.innerText = "🟢 ESCUCHANDO AL CELULAR... (Clic p/ Detener)";
+                return;
+            }
+
+            if (sys.audioListening) {
+                stopAcousticListener();
+                btn.classList.remove('listening');
+                btn.innerText = "🎙️ COMENZAR A ESCUCHAR";
+                lbl.innerText = "APAGADO";
+                const liveBuf = document.getElementById('rx-live-buffer');
+                if (liveBuf) liveBuf.innerText = "ESPERANDO SONIDO...";
+                setSenderAcousticPhaseUI(0);
+                drawStandbySpectrogram();
+                return;
+            }
+            await ensurePassiveAcousticListener(true);
+        }
+
+        function stopAcousticListener() {
+            sys.audioListening = false;
+            cancelAnimationFrame(sys.fftLoopId);
+            if (sys.audioStream) {
+                sys.audioStream.getTracks().forEach(t => t.stop());
+                sys.audioStream = null;
+            }
+        }
+
+        // Prueba acústica física: el micrófono debe captar el sonido real de las bocinas.
+        async function runAcousticLoopbackTest() {
+            await forceActivateMicrophone();
+            if (sys.loopbackTesting) return;
+            sys.loopbackTesting = true;
+            const listenerReady = sys.audioListening;
+
+            const liveBuf = document.getElementById('rx-live-buffer');
+            if (liveBuf) liveBuf.innerText = listenerReady
+                ? "EMITIENDO TEST FÍSICO (BANDA VOCAL)..."
+                : "EMITIENDO TONOS; MICRÓFONO NO DISPONIBLE PARA VALIDAR...";
+            setSenderAcousticPhaseUI(0);
+
+            const testSequence = [
+                ACOUSTIC_PROTOCOL.HELLO, // 760 Hz
+                680,  // 'S'
+                920,  // '0'
+                1240, // '4'
+                1800, // ','
+                920,  // '0'
+                1640, // '9'
+                ACOUSTIC_PROTOCOL.EOF    // 1880 Hz
+            ];
+
+            try {
+                for (const f of testSequence) {
+                    if (listenerReady && !sys.audioListening) break;
+                    await emitLaptopTone(f, 185, false);
+                    await new Promise(r => setTimeout(r, 55));
+                }
+                if (listenerReady) {
+                    for (let i = 0; i < 24 && sys.audioListening && sys.acousticPhase !== 3; i++) {
+                        await new Promise(r => setTimeout(r, 100));
+                    }
+                    if (sys.audioListening && sys.acousticPhase !== 3 && liveBuf) {
+                        setSenderAcousticPhaseUI(0);
+                        liveBuf.innerText = "❌ Sin recepción física. Revisa micrófono, volumen y distancia.";
+                    }
+                } else if (liveBuf) {
+                    liveBuf.innerText = "🔊 Tonos emitidos. La prueba física necesita permiso de micrófono para confirmar recepción.";
+                }
+            } finally {
+                sys.loopbackTesting = false;
+            }
+        }
+
+        function classifyFrequencySymbol(freqHz) {
+            const tol = ACOUSTIC_PROTOCOL.TOLERANCE_HZ;
+            if (Math.abs(freqHz - ACOUSTIC_PROTOCOL.HELLO) <= tol) return { type: 'HELLO' };
+            if (Math.abs(freqHz - ACOUSTIC_PROTOCOL.REPEAT) <= tol) return { type: 'REPEAT' };
+            if (Math.abs(freqHz - ACOUSTIC_PROTOCOL.EOF) <= tol) return { type: 'EOF' };
+
+            for (const item of ACOUSTIC_PROTOCOL.FREQ_TO_CHAR) {
+                if (Math.abs(freqHz - item.f) <= tol) {
+                    return { type: 'DATA', ch: item.ch };
+                }
+            }
+            return null;
+        }
+
+        // Mapea intensidad (0..255) a color térmico para la cascada Waterfall
+        function intensityToWaterfallColor(v) {
+            if (v < 20) return [3, 7, 16];
+            if (v < 70) return [12, 45, 110];
+            if (v < 130) return [0, 170, 255];
+            if (v < 190) return [0, 255, 95];
+            return [255, 238, 0];
+        }
+
+        function scanAcousticFFTLoop() {
+            if (!sys.audioListening || !sys.analyser) return;
+
+            const canvas = document.getElementById('audio-fft-canvas');
+            const ctx = canvas.getContext('2d');
+            const w = canvas.width = canvas.clientWidth || 320;
+            const h = canvas.height = canvas.clientHeight || 98;
+            ctx.clearRect(0, 0, w, h);
+
+            // Si el navegador aún mantiene el AudioContext en estado 'suspended', mostrar aviso interactivo claro
+            if (sys.audioCtx && sys.audioCtx.state === 'suspended') {
+                ctx.fillStyle = 'rgba(210, 153, 34, 0.16)';
+                ctx.fillRect(0, 0, w, h);
+                ctx.fillStyle = '#f0ad4e';
+                ctx.font = 'bold 11px Consolas, monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('⚠️ HAZ CLIC AQUÍ PARA ACTIVAR EL AUDIO DEL NAVEGADOR', w / 2, h / 2 - 4);
+                ctx.fillStyle = '#8b949e';
+                ctx.font = '10px Consolas, monospace';
+                ctx.fillText('(Requerido en páginas HTML locales para habilitar FFT)', w / 2, h / 2 + 12);
+                sys.fftLoopId = requestAnimationFrame(scanAcousticFFTLoop);
+                return;
+            }
+
+            const bufferLen = sys.analyser.frequencyBinCount;
+            const data = new Uint8Array(bufferLen);
+            sys.analyser.getByteFrequencyData(data);
+
+            const sampleRate = sys.audioCtx.sampleRate || 48000;
+            const binHz = sampleRate / sys.analyser.fftSize;
+
+            // Rango visual (200 Hz a 2400 Hz) centrado en la banda donde el micrófono de laptop tiene máxima sensibilidad
+            const visMinBin = Math.max(1, Math.floor(200 / binHz));
+            const visMaxBin = Math.min(bufferLen - 1, Math.ceil(2400 / binHz));
+
+            // Banda activa del módem FSK en frecuencia vocal humana (630 Hz a 1940 Hz)
+            const fskMinBin = Math.floor(630 / binHz);
+            const fskMaxBin = Math.min(bufferLen - 1, Math.ceil(1940 / binHz));
+
+            let peakVal = 0;
+            let peakBin = fskMinBin;
+            let sumVal = 0;
+            for (let b = fskMinBin; b <= fskMaxBin; b++) {
+                const v = data[b];
+                sumVal += v;
+                if (v > peakVal) {
+                    peakVal = v;
+                    peakBin = b;
+                }
+            }
+            const avgNoise = sumVal / Math.max(1, fskMaxBin - fskMinBin + 1);
+            const snrDiff = Math.max(0, Math.round(peakVal - avgNoise));
+
+            // Interpolación parabólica sub-bin para máxima precisión en Hz
+            let fineBin = peakBin;
+            if (peakBin > fskMinBin && peakBin < fskMaxBin) {
+                const alpha = data[peakBin - 1];
+                const beta = data[peakBin];
+                const gamma = data[peakBin + 1];
+                const denom = alpha - 2 * beta + gamma;
+                if (denom !== 0) {
+                    fineBin = peakBin + 0.5 * (alpha - gamma) / denom;
+                }
+            }
+            const dominantFreq = Math.round(fineBin * binHz);
+
+            // Mitad superior (0 .. specH): Analizador de Espectro FFT en vivo
+            const specH = Math.floor(h * 0.52);
+            const wfY = specH + 2;
+            const wfH = h - wfY;
+
+            // Sombrear la zona activa del módem FSK (630 Hz - 1940 Hz)
+            const fskStartX = ((fskMinBin - visMinBin) / (visMaxBin - visMinBin)) * w;
+            const fskEndX = ((fskMaxBin - visMinBin) / (visMaxBin - visMinBin)) * w;
+            ctx.fillStyle = 'rgba(47, 129, 247, 0.12)';
+            ctx.fillRect(fskStartX, 0, Math.max(10, fskEndX - fskStartX), specH);
+
+            const numBars = 64;
+            const binSpan = Math.max(1, visMaxBin - visMinBin);
+            for (let i = 0; i < numBars; i++) {
+                const bStart = visMinBin + Math.floor((i / numBars) * binSpan);
+                const bEnd = Math.max(bStart + 1, visMinBin + Math.floor(((i + 1) / numBars) * binSpan));
+                let maxB = 0;
+                for (let b = bStart; b < bEnd && b < bufferLen; b++) {
+                    if (data[b] > maxB) maxB = data[b];
+                }
+                const norm = maxB / 255;
+                const isFskZone = bStart >= fskMinBin && bStart <= fskMaxBin;
+                if (isFskZone) {
+                    ctx.fillStyle = maxB > 50 ? '#00ff41' : '#2f81f7';
+                } else {
+                    ctx.fillStyle = maxB > 70 ? '#39c5bb' : '#1f4468';
+                }
+                const barH = Math.max(1, norm * (specH - 4));
+                const bx = (i / numBars) * w;
+                const bw = Math.max(1.5, (w / numBars) - 1);
+                ctx.fillRect(bx, specH - barH, bw, barH);
+            }
+
+            // Línea divisoria y etiquetas de banda
+            ctx.strokeStyle = '#26354d';
+            ctx.beginPath();
+            ctx.moveTo(0, specH + 1);
+            ctx.lineTo(w, specH + 1);
+            ctx.stroke();
+
+            ctx.fillStyle = 'rgba(201, 209, 217, 0.65)';
+            ctx.font = '9px Consolas, monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText('GRAVES (200-630Hz)', 4, 10);
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#79c0ff';
+            ctx.fillText(`BANDA VOCAL FSK (680-1880Hz) | PICO: ${dominantFreq}Hz`, w - 4, 10);
+
+            // Mitad inferior (wfY .. h): Espectrograma Waterfall 2D en Cascada
+            const wfW = waterfallCanvas.width;
+            const wfCanvasH = waterfallCanvas.height;
+            waterfallCtx.drawImage(waterfallCanvas, 0, 0, wfW, wfCanvasH - 1, 0, 1, wfW, wfCanvasH - 1);
+
+            const rowImg = waterfallCtx.createImageData(wfW, 1);
+            const rowPixels = rowImg.data;
+            for (let x = 0; x < wfW; x++) {
+                const binIdx = Math.min(bufferLen - 1, visMinBin + Math.floor((x / wfW) * binSpan));
+                const val = data[binIdx];
+                const [r, g, b] = intensityToWaterfallColor(val);
+                const p = x * 4;
+                rowPixels[p] = r;
+                rowPixels[p + 1] = g;
+                rowPixels[p + 2] = b;
+                rowPixels[p + 3] = 255;
+            }
+            waterfallCtx.putImageData(rowImg, 0, 0);
+            ctx.drawImage(waterfallCanvas, 0, wfY, w, wfH);
+
+            const snrLbl = document.getElementById('rx-snr-lbl');
+            if (snrLbl) {
+                snrLbl.innerText = `Pico: ${peakVal}/255 | SNR: +${snrDiff} | Gain: ${sys.micGainLevel.toFixed(1)}x`;
+            }
+
+            // Demodulación FSK en banda vocal (680-1880 Hz): sensible al celular pero protegida por preámbulo HELLO
+            if (!sys.isEmittingTone) {
+                const isStrongSignal = (peakVal >= 55 && snrDiff >= 16);
+                if (isStrongSignal) {
+                    sys.silenceFrames = 0;
+                    const sym = classifyFrequencySymbol(dominantFreq);
+                    if (sym) {
+                        const tag = sym.type === 'DATA' ? `'${sym.ch}'` : sym.type;
+                        document.getElementById('fft-freq-lbl').innerText = `${dominantFreq} Hz [${tag}]`;
+
+                        const symKey = sym.type === 'DATA' ? `D_${sym.ch}` : sym.type;
+                        if (sys.candidateSymbol === symKey) {
+                            sys.candidateHits++;
+                        } else {
+                            sys.candidateSymbol = symKey;
+                            sys.candidateHits = 1;
+                        }
+
+                        const requiredHits = sym.type === 'HELLO' ? 3 : 2;
+                        if (sys.candidateHits >= requiredHits && sys.lastDecodedSymbol !== symKey) {
+                            sys.lastDecodedSymbol = symKey;
+                            handleDemodulatedSymbol(sym);
+                        }
+                    } else {
+                        document.getElementById('fft-freq-lbl').innerText = `${dominantFreq} Hz`;
+                    }
+                } else {
+                    sys.silenceFrames++;
+                    if (sys.silenceFrames >= 2) {
+                        sys.candidateSymbol = null;
+                        sys.candidateHits = 0;
+                        if (sys.silenceFrames >= 3) {
+                            sys.lastDecodedSymbol = null;
+                        }
+                    }
+                    if (sys.silenceFrames > 25 && sys.acousticPhase === 0) {
+                        document.getElementById('fft-freq-lbl').innerText = "MIC ACTIVO (ESCUCHANDO)";
+                    }
+                }
+            }
+
+            sys.fftLoopId = requestAnimationFrame(scanAcousticFFTLoop);
+        }
+
+        async function handleDemodulatedSymbol(sym) {
+            // 1. Tono de inicio HELLO (760 Hz en banda vocal): abre o mantiene abierta la ventana de recepción
+            if (sym.type === 'HELLO') {
+                sys.rxRleBuffer = "";
+                sys.lastSymbolChar = "";
+                setSenderAcousticPhaseUI(1);
+                clearTimeout(sys.rxSessionTimeout);
+                sys.rxSessionTimeout = setTimeout(() => {
+                    if (sys.rxRleBuffer.length >= 2) finalizeAcousticRleReception();
+                    else setSenderAcousticPhaseUI(0);
+                }, 9000);
+                return;
+            }
+
+            // 2. Solo aceptar datos si estamos formalmente en Fase 1 o 2 (tras haber escuchado HELLO 760Hz)
+            if (sym.type === 'DATA' || sym.type === 'REPEAT') {
+                if (sys.acousticPhase !== 1 && sys.acousticPhase !== 2) return;
+
+                const ch = (sym.type === 'REPEAT') ? sys.lastSymbolChar : sym.ch;
+                if (ch) {
+                    if (ch === 'S') {
+                        sys.rxRleBuffer = 'S';
+                    } else {
+                        sys.rxRleBuffer += ch;
+                    }
+                    sys.lastSymbolChar = ch;
+                    setSenderAcousticPhaseUI(2, sys.rxRleBuffer);
+                }
+
+                clearTimeout(sys.rxSessionTimeout);
+                sys.rxSessionTimeout = setTimeout(() => {
+                    if (sys.rxRleBuffer.length >= 2) finalizeAcousticRleReception();
+                    else setSenderAcousticPhaseUI(0);
+                }, 2200);
+                return;
+            }
+
+            if (sym.type === 'EOF') {
+                if (sys.acousticPhase === 1 || sys.acousticPhase === 2) {
+                    clearTimeout(sys.rxSessionTimeout);
+                    await finalizeAcousticRleReception();
+                }
+            }
+        }
+
+        async function finalizeAcousticRleReception() {
+            const rawStr = sys.rxRleBuffer.replace(/^[, -]+|[, -]+$/g, '');
+            sys.rxRleBuffer = "";
+            sys.lastSymbolChar = "";
+
+            const liveBuf = document.getElementById('rx-live-buffer');
+            if (!rawStr || rawStr.length < 2) {
+                setSenderAcousticPhaseUI(0);
+                return;
+            }
+
+            // Mostrar la trama recibida en el monitor en vivo y en el campo manual sin interrumpir el QR
+            document.getElementById('custom-frames').value = rawStr;
+            if (liveBuf) liveBuf.innerText = `✅ RECIBIDO: ${rawStr}`;
+
+            if (!sys.totalChunks) {
+                setSenderAcousticPhaseUI(3);
+                setTimeout(() => {
+                    if (sys.acousticPhase === 3) setSenderAcousticPhaseUI(0);
+                }, 4000);
+                return;
+            }
+
+            const decodedMissing = parseMacroSectorsOrRanges(rawStr, sys.totalChunks);
+            if (decodedMissing.length > 0) {
+                sys.activeIndices = decodedMissing;
+                sys.activeSet = new Set(decodedMissing);
+                sys.activeIdx = 0;
+                setTxMode('priority', true);
+                updateTimelineBounds();
+                syncCustomFramesInput();
+                renderCurrentActiveFrame();
+
+                setSenderAcousticPhaseUI(3);
+                document.getElementById('status').innerText = `● BUCLE PRIORITARIO ACTUALIZADO (${decodedMissing.length} FALTANTES DE ${rawStr})`;
+
+                setTimeout(() => {
+                    if (sys.acousticPhase === 3) setSenderAcousticPhaseUI(0);
+                }, 4000);
+            } else {
+                setSenderAcousticPhaseUI(0);
+            }
+        }
+
+        // =========================================================================
+        // 6. MAPA DE CALOR LINEAL INTERACTIVO Y HERRAMIENTAS DE CUADRATURA
+        // =========================================================================
+        function drawTimelineHeatmap() {
+            const canvas = document.getElementById('timeline-heatmap');
+            if (!canvas) return;
+            const dpr = window.devicePixelRatio || 1;
+            const w = (canvas.clientWidth || 400) * dpr;
+            const h = (canvas.clientHeight || 22) * dpr;
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+            }
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, w, h);
+
+            if (sys.totalChunks <= 0) return;
+
+            const cols = Math.min(sys.totalChunks, Math.floor(w));
+            const sliceW = w / cols;
+
+            for (let c = 0; c < cols; c++) {
+                const idxStart = Math.floor((c / cols) * sys.totalChunks);
+                const idxEnd = Math.max(idxStart + 1, Math.floor(((c + 1) / cols) * sys.totalChunks));
+                let hasActive = false;
+                for (let k = idxStart; k < idxEnd; k++) {
+                    if (sys.activeSet.has(k)) {
+                        hasActive = true;
+                        break;
+                    }
+                }
+                if (sys.txMode === 'priority') {
+                    ctx.fillStyle = hasActive ? '#ff9e00' : '#0b4f22';
+                } else if (sys.txMode === 'fountain') {
+                    ctx.fillStyle = '#2f81f7';
+                } else {
+                    ctx.fillStyle = '#00a82d';
+                }
+                ctx.fillRect(c * sliceW, 0, Math.ceil(sliceW - (cols < 120 ? 1 : 0)), h);
+            }
+
+            if (sys.activeIndices.length > 0 && sys.txMode !== 'fountain') {
+                const currentChunk = sys.activeIndices[sys.activeIdx] || 0;
+                const cx = (currentChunk / sys.totalChunks) * w;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(Math.max(0, cx - 2 * dpr), 0, 4 * dpr, h);
+            }
+        }
+
+        !function initInteractiveHeatmap() {
+            const canvas = document.getElementById('timeline-heatmap');
+            const tooltip = document.getElementById('heatmap-tooltip');
+
+            function clientXToChunkIndex(clientX) {
+                const rect = canvas.getBoundingClientRect();
+                const ratio = Math.max(0, Math.min(0.9999, (clientX - rect.left) / rect.width));
+                return Math.floor(ratio * sys.totalChunks);
+            }
+
+            function applyBrushAt(idx) {
+                if (!sys.totalChunks || idx < 0 || idx >= sys.totalChunks) return;
+                if (sys.txMode !== 'priority') {
+                    setTxMode('priority', true);
+                }
+
+                const radius = sys.totalChunks > 500 ? Math.ceil(sys.totalChunks / 200) : 0;
+                for (let k = Math.max(0, idx - radius); k <= Math.min(sys.totalChunks - 1, idx + radius); k++) {
+                    if (sys.paintAction) {
+                        sys.activeSet.add(k);
+                    } else if (sys.activeSet.size > 1) {
+                        sys.activeSet.delete(k);
+                    }
+                }
+
+                sys.activeIndices = Array.from(sys.activeSet).sort((a, b) => a - b);
+                sys.activeIdx = Math.min(sys.activeIdx, Math.max(0, sys.activeIndices.length - 1));
+                updateTimelineBounds();
+                syncCustomFramesInput();
+                renderCurrentActiveFrame();
+            }
+
+            canvas.addEventListener('pointerdown', (e) => {
+                if (!sys.totalChunks || sys.activeIndices.length === 0) return;
+                const idx = clientXToChunkIndex(e.clientX);
+
+                // Saltar el cursor al bloque activo más cercano sin borrar la cola de transmisión
+                let bestPos = 0;
+                let bestDist = Infinity;
+                for (let i = 0; i < sys.activeIndices.length; i++) {
+                    const dist = Math.abs(sys.activeIndices[i] - idx);
+                    if (dist < bestDist) {
+                        bestDist = dist;
+                        bestPos = i;
+                    }
+                }
+                sys.activeIdx = bestPos;
+                updateTimelineBounds();
+                renderCurrentActiveFrame();
+            });
+
+            canvas.addEventListener('pointermove', (e) => {
+                if (!sys.totalChunks) return;
+                const rect = canvas.getBoundingClientRect();
+                const idx = clientXToChunkIndex(e.clientX);
+                const isPriority = sys.activeSet.has(idx);
+
+                tooltip.style.display = 'block';
+                tooltip.style.left = `${Math.max(45, Math.min(rect.width - 45, e.clientX - rect.left))}px`;
+                tooltip.innerText = `Blk #${idx} [${isPriority ? (sys.txMode === 'priority' ? 'En Cola Prioritaria' : 'Activo') : 'Confirmado'}]`;
+
+                if (sys.isPaintingHeatmap) {
+                    applyBrushAt(idx);
+                }
+            });
+
+            window.addEventListener('pointerup', () => {
+                sys.isPaintingHeatmap = false;
+            });
+
+            canvas.addEventListener('pointerleave', () => {
+                tooltip.style.display = 'none';
+            });
+        }();
+
+        function squareToStart() {
+            if (!sys.totalChunks) return;
+            sys.activeIdx = 0;
+            sys.tickCount = 0;
+            updateTimelineBounds();
+            renderHeaderFrame();
+            document.getElementById('status').innerText = "● COLA CUADRADA AL INICIO [SYN]";
+        }
+
+        function fillSmallGaps(maxGap = 3) {
+            if (!sys.totalChunks || sys.activeIndices.length < 2) return;
+            const sorted = [...sys.activeIndices].sort((a, b) => a - b);
+            const filled = new Set(sorted);
+
+            for (let i = 0; i < sorted.length - 1; i++) {
+                const gap = sorted[i + 1] - sorted[i] - 1;
+                if (gap > 0 && gap <= maxGap) {
+                    for (let k = sorted[i] + 1; k < sorted[i + 1]; k++) {
+                        filled.add(k);
+                    }
+                }
+            }
+
+            sys.activeIndices = Array.from(filled).sort((a, b) => a - b);
+            sys.activeIdx = 0;
+            setTxMode('priority', true);
+            updateTimelineBounds();
+            syncCustomFramesInput();
+            renderCurrentActiveFrame();
+            document.getElementById('status').innerText = `● HUECOS RELLENADOS (${sys.activeIndices.length} BLKS)`;
+        }
+
+        function expandActiveIntervals(padding = 2) {
+            if (!sys.totalChunks || sys.activeIndices.length === 0) return;
+            const expanded = new Set(sys.activeIndices);
+            for (const idx of sys.activeIndices) {
+                for (let d = -padding; d <= padding; d++) {
+                    const target = idx + d;
+                    if (target >= 0 && target < sys.totalChunks) {
+                        expanded.add(target);
+                    }
+                }
+            }
+            sys.activeIndices = Array.from(expanded).sort((a, b) => a - b);
+            setTxMode('priority', true);
+            updateTimelineBounds();
+            syncCustomFramesInput();
+            renderCurrentActiveFrame();
+            document.getElementById('status').innerText = `● BORDES EXPANDIDOS ±${padding} (${sys.activeIndices.length} BLKS)`;
+        }
+
+        function shiftActiveQueue(offset) {
+            if (!sys.totalChunks || sys.activeIndices.length === 0) return;
+
+            if (sys.txMode === 'full' || sys.activeIndices.length === sys.totalChunks) {
+                sys.activeIdx = (sys.activeIdx + offset + sys.activeIndices.length * 10) % sys.activeIndices.length;
+                updateTimelineBounds();
+                renderCurrentActiveFrame();
+                return;
+            }
+
+            const shifted = new Set();
+            for (const idx of sys.activeIndices) {
+                const nextIdx = (idx + offset + sys.totalChunks * 10) % sys.totalChunks;
+                shifted.add(nextIdx);
+            }
+            sys.activeIndices = Array.from(shifted).sort((a, b) => a - b);
+            sys.activeIdx = Math.min(sys.activeIdx, sys.activeIndices.length - 1);
+            updateTimelineBounds();
+            syncCustomFramesInput();
+            renderCurrentActiveFrame();
+            document.getElementById('status').innerText = `● COLA DESPLAZADA (${offset > 0 ? '+' : ''}${offset} FRAMES)`;
+        }
+
+        function updateTimelineBounds() {
+            const scrubber = document.getElementById('timeline-scrubber');
+            scrubber.max = Math.max(0, sys.activeIndices.length - 1);
+            scrubber.value = sys.activeIdx;
+            sys.activeSet = new Set(sys.activeIndices);
+            document.getElementById('mt-active').innerText = `${sys.activeIndices.length} / ${sys.totalChunks}`;
+            drawTimelineHeatmap();
+            draw2DGridSelector();
+        }
+
+        function triggerPulseLed() {
+            const led = document.getElementById('pulse-led');
+            sys.pulseToggle = !sys.pulseToggle;
+            led.className = sys.pulseToggle ? 'pulse-led on-a' : 'pulse-led on-b';
+        }
+
+        function renderHeaderFrame() {
+            if (!sys.qr || !sys.headerPayload) return;
+            try {
+                sys.qr.makeCode(sys.headerPayload);
+            } catch (e) { console.error("Error renderHeaderFrame:", e); }
+            triggerPulseLed();
+            document.getElementById('frame-badge').innerText = "HEADER [SYN]";
+            document.getElementById('lbl-queue-pos').innerText = `SYN / ${sys.activeIndices.length}`;
+            document.getElementById('lbl-chunk-idx').innerText = "HEADER";
+            updateZenHud("HEADER");
+            drawTimelineHeatmap();
+            draw2DGridSelector();
+        }
+
+        function renderFountainParityFrame() {
+            if (!sys.qr || !sys.totalChunks) return;
+            sys.fountainSeed = (sys.fountainSeed + 1) % 65000;
+            if (sys.fountainSeed < sys.totalChunks + 10) sys.fountainSeed = sys.totalChunks + 10;
+
+            const { payload, recipe } = generateFountainParityFrame(sys.fountainSeed);
+            try {
+                sys.qr.makeCode(payload);
+            } catch (e) { console.error("Error renderFountainParityFrame:", e); }
+            triggerPulseLed();
+            document.getElementById('frame-badge').innerText = `⚡XOR #${sys.fountainSeed}`;
+            document.getElementById('lbl-queue-pos').innerText = `FOUNTAIN (${recipe.length}d)`;
+            document.getElementById('lbl-chunk-idx').innerText = `XOR[${recipe.slice(0, 3).join(',')}${recipe.length > 3 ? '..' : ''}]`;
+            updateZenHud(`⚡XOR #${sys.fountainSeed}`);
+        }
+
+        function renderCurrentActiveFrame() {
+            if (!sys.qr || sys.activeIndices.length === 0) return;
+            const chunkIdx = sys.activeIndices[sys.activeIdx];
+            try {
+                sys.qr.makeCode(sys.chunksPayloads[chunkIdx]);
+            } catch (e) { console.error("Error renderCurrentActiveFrame:", e); }
+            triggerPulseLed();
+            document.getElementById('frame-badge').innerText = `BLK #${chunkIdx}`;
+            document.getElementById('lbl-queue-pos').innerText = `${sys.activeIdx + 1} / ${sys.activeIndices.length}`;
+            document.getElementById('lbl-chunk-idx').innerText = `${chunkIdx} (de ${sys.totalChunks})`;
+            document.getElementById('timeline-scrubber').value = sys.activeIdx;
+            updateZenHud(`BLK #${chunkIdx}`);
+            drawTimelineHeatmap();
+            draw2DGridSelector();
+        }
+
+        function updateZenHud(frameLabel) {
+            const modeLabels = {
+                full: 'SISTEMÁTICO + XOR',
+                fountain: 'FOUNTAIN PURO (XOR)',
+                priority: 'PRIORITY LOOP'
+            };
+            document.getElementById('zen-hud').innerText =
+                `${frameLabel} | COLA ${sys.activeIdx + 1}/${sys.activeIndices.length} | ${sys.fps} FPS | ${modeLabels[sys.txMode] || ''}`;
+        }
+
+        function setFPS(fpsVal, fromSlider = false) {
+            const fps = Math.max(2, Math.min(30, parseInt(fpsVal, 10) || 12));
+            sys.fps = fps;
+            const ms = Math.round(1000 / fps);
+            document.getElementById('speed-lbl').innerText = `${fps} FPS (${ms} ms)`;
+            if (!fromSlider) {
+                document.getElementById('fps-range').value = fps;
+            }
+            document.querySelectorAll('#qr-card .preset-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.innerText === `${fps} FPS`);
+            });
+            updateZenHud(sys.activeIndices.length ? `BLK #${sys.activeIndices[sys.activeIdx] || 0}` : "STANDBY");
+            if (sys.running) {
+                clearInterval(sys.timer);
+                startTimer();
+            }
+        }
+
+        function adjustFPS(delta) {
+            setFPS(sys.fps + delta);
+        }
+
+        function startTimer() {
+            const intervalMs = Math.round(1000 / sys.fps);
+            sys.timer = setInterval(() => {
+                if (sys.activeIndices.length === 0) return;
+                sys.tickCount++;
+
+                // Cabecera SYN cada 40 ticks en lugar de 30 para reducir parpadeos
+                if (sys.tickCount % 40 === 0) {
+                    renderHeaderFrame();
+                    return;
+                }
+
+                // Si quedan muy pocos bloques (<= 3), intercalar paridad XOR cada 2 ticks
+                const fewBlocks = sys.activeIndices.length <= 3;
+                if (sys.txMode === 'fountain' || (sys.txMode === 'full' && sys.tickCount % 5 === 0) || (fewBlocks && sys.tickCount % 2 === 0)) {
+                    renderFountainParityFrame();
+                    return;
+                }
+
+                renderCurrentActiveFrame();
+                sys.activeIdx = (sys.activeIdx + 1) % sys.activeIndices.length;
+            }, intervalMs);
+        }
+
+        function togglePlay() {
+            if (!sys.chunksPayloads.length) return;
+            const btn = document.getElementById('run-btn');
+            const zBtn = document.getElementById('zen-play');
+
+            if (sys.running) {
+                clearInterval(sys.timer);
+                sys.running = false;
+                btn.innerHTML = "▶ REANUDAR";
+                zBtn.innerHTML = "▶";
+                document.getElementById('pulse-led').className = 'pulse-led';
+                document.getElementById('status').innerText = "● EN PAUSA";
+            } else {
+                sys.running = true;
+                btn.innerHTML = "⏸ PAUSAR";
+                zBtn.innerHTML = "⏸";
+                document.getElementById('status').innerText = "● TRANSMITIENDO...";
+                startTimer();
+            }
+        }
+
+        function stepFrame(delta) {
+            if (!sys.chunksPayloads.length || sys.activeIndices.length === 0) return;
+            if (sys.running) togglePlay();
+            sys.activeIdx = (sys.activeIdx + delta + sys.activeIndices.length) % sys.activeIndices.length;
+            renderCurrentActiveFrame();
+        }
+
+        function scrubTimeline(pos) {
+            if (!sys.chunksPayloads.length || sys.activeIndices.length === 0) return;
+            if (sys.running) togglePlay();
+            sys.activeIdx = parseInt(pos, 10);
+            renderCurrentActiveFrame();
+        }
+
+        function rewind() {
+            if (!sys.chunksPayloads.length) return;
+            if (sys.running) togglePlay();
+            sys.activeIdx = 0;
+            sys.tickCount = 0;
+            renderHeaderFrame();
+        }
+
+        function setTxMode(mode, silent = false) {
+            sys.txMode = mode;
+            document.getElementById('tx-mode-full').classList.toggle('active', mode === 'full');
+            document.getElementById('tx-mode-fountain').classList.toggle('active', mode === 'fountain');
+            document.getElementById('tx-mode-priority').classList.toggle('active', mode === 'priority');
+
+            if ((mode === 'full' || mode === 'fountain') && sys.totalChunks > 0 && !silent) {
+                sys.activeIndices = Array.from({ length: sys.totalChunks }, (_, i) => i);
+                sys.activeIdx = 0;
+                updateTimelineBounds();
+                syncCustomFramesInput();
+                if (mode === 'fountain') renderFountainParityFrame();
+                else renderCurrentActiveFrame();
+            } else {
+                drawTimelineHeatmap();
+                draw2DGridSelector();
+            }
+        }
+
+        // =========================================================================
+        // 7. DECODIFICACIÓN DE BITMAP PLANO (664 B) Y BISECCIÓN POR MACRO-SECTORES (S00..S31)
+        // =========================================================================
+        function triggerFlashAck(missingCount, customTitle = "✅ COLA RECONFIGURADA") {
+            // Actualización discreta en barra de estado superior sin mostrar pantallas verdes ni interrumpir el QR
+            const statusEl = document.getElementById('status');
+            if (statusEl) {
+                statusEl.innerText = missingCount > 0
+                    ? `● ${customTitle}: ${missingCount} BLOQUES EN COLA`
+                    : `● ${customTitle}`;
+            }
+        }
+
+        function applyMissingBitmapBytes(rawBytes, total) {
+            const missingIndices = [];
+            for (let i = 0; i < total; i++) {
+                const byte = rawBytes[Math.floor(i / 8)] || 0;
+                const bit = (byte >> (i % 8)) & 1;
+                if (bit === 0) missingIndices.push(i);
+            }
+            return missingIndices;
+        }
+
+        function applyMissingBitmapBase64(b64Bitmap, total) {
+            const raw = atob(b64Bitmap);
+            const bytes = new Uint8Array(raw.length);
+            for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+            return applyMissingBitmapBytes(bytes, total);
+        }
+
+        // Interpreta identificadores de Macro-Sectores (ej. "S04,09,12" sobre 32 sectores), rangos RLE ("4-12,18") o listas separadas por comas/espacios/saltos de línea
+        function parseMacroSectorsOrRanges(str, total) {
+            const trimmed = str.trim().toUpperCase();
+
+            // 1. Manejo de Macro-Sectores (S00..S31)
+            if (trimmed.startsWith('S')) {
+                const numSectors = Math.min(32, Math.max(4, total));
+                const sectorSize = Math.ceil(total / numSectors);
+                const sectorIds = trimmed.substring(1).split(/[\s,]+/).map(s => parseInt(s.replace(/[^0-9]/g, ''), 10)).filter(n => !isNaN(n));
+                const indices = new Set();
+                for (const sId of sectorIds) {
+                    if (sId >= 0 && sId < numSectors) {
+                        const start = sId * sectorSize;
+                        const end = Math.min(total - 1, (sId + 1) * sectorSize - 1);
+                        for (let i = start; i <= end; i++) indices.add(i);
+                    }
+                }
+                return Array.from(indices).sort((a, b) => a - b);
+            }
+
+            // 2. Manejo de Listas separadas por comas, espacios, punto y coma o rangos (0, 1, 4-8, 12...)
+            const indices = new Set();
+            const tokens = trimmed.split(/[\s,;\n\r]+/);
+            for (const token of tokens) {
+                if (!token) continue;
+                if (token.includes('-')) {
+                    const parts = token.split('-');
+                    const start = parseInt(parts[0], 10);
+                    const end = parseInt(parts[1], 10);
+                    if (!isNaN(start) && !isNaN(end)) {
+                        for (let i = Math.max(0, start); i <= Math.min(total - 1, end); i++) {
+                            indices.add(i);
+                        }
+                    }
+                } else {
+                    const num = parseInt(token, 10);
+                    if (!isNaN(num) && num >= 0 && num < total) {
+                        indices.add(num);
+                    }
+                }
+            }
+            return Array.from(indices).sort((a, b) => a - b);
+        }
+
+        function processReverseAckPayload(rawText) {
+            if (!sys.totalChunks) return false;
+            let missing = [];
+            const trimmed = rawText.trim();
+
+            try {
+                if (trimmed.startsWith('{')) {
+                    const obj = JSON.parse(trimmed);
+                    if (obj.t === "ACK") {
+                        if (typeof obj.z85 === "string") {
+                            const bmpBytes = decodeZ85ToBytes(obj.z85, obj.len);
+                            missing = applyMissingBitmapBytes(bmpBytes, sys.totalChunks);
+                        } else if (typeof obj.b === "string") {
+                            missing = applyMissingBitmapBase64(obj.b, sys.totalChunks);
+                        } else if (typeof obj.r === "string") {
+                            missing = parseMacroSectorsOrRanges(obj.r, sys.totalChunks);
+                        }
+                    }
+                } else if (/^[S0-9,;\-\s]+$/i.test(trimmed)) {
+                    missing = parseMacroSectorsOrRanges(trimmed, sys.totalChunks);
+                } else {
+                    missing = applyMissingBitmapBase64(trimmed, sys.totalChunks);
+                }
+            } catch (e) {
+                console.warn("Formato ACK no reconocido:", e);
+                return false;
+            }
+
+            if (missing.length === 0) {
+                triggerFlashAck(0);
+                alert("✅ El receptor reporta 0 bloques faltantes (100% completado).");
+                return true;
+            }
+
+            sys.activeIndices = missing;
+            sys.activeSet = new Set(missing);
+            sys.activeIdx = 0;
+            setTxMode('priority', true);
+            updateTimelineBounds();
+            syncCustomFramesInput();
+            renderCurrentActiveFrame();
+            triggerFlashAck(missing.length);
+            return true;
+        }
+
+        function applyCustomFrames() {
+            if (!sys.totalChunks) return;
+            const input = document.getElementById('custom-frames').value.trim();
+            if (!input) {
+                setTxMode('full');
+                return;
+            }
+            if (processReverseAckPayload(input)) {
+                document.getElementById('status').innerText = `● PRIORITY LOOP (${sys.activeIndices.length} FALTANTES)`;
+                if (!sys.running) togglePlay();
+            } else {
+                alert("Formato de macro-sector, rango o bitmap inválido.");
+            }
+        }
+
+        // Lectura de 1 solo toque desde el portapapeles
+        async function pasteFromClipboardAndApply() {
+            if (!sys.totalChunks) {
+                alert("Primero carga un archivo en el emisor.");
+                return;
+            }
+            try {
+                const text = await navigator.clipboard.readText();
+                if (!text || !text.trim()) {
+                    alert("El portapapeles está vacío.");
+                    return;
+                }
+                document.getElementById('custom-frames').value = text.trim();
+                applyCustomFrames();
+            } catch (err) {
+                const fallback = prompt("Pega aquí la lista de bloques o macro-sectores copiados:");
+                if (fallback) {
+                    document.getElementById('custom-frames').value = fallback.trim();
+                    applyCustomFrames();
+                }
+            }
+        }
+
+        async function openAckScanner() {
+            if (!sys.totalChunks) return;
+            if (sys.running) togglePlay();
+
+            document.getElementById('ack-modal').classList.add('open');
+            document.getElementById('ack-status').innerText = "Iniciando cámara para lectura de Bitmap Plano QR...";
+
+            try {
+                if (!sys.ackScanner) {
+                    sys.ackScanner = new Html5Qrcode("ack-reader");
+                }
+                await sys.ackScanner.start(
+                    { facingMode: "user" },
+                    { fps: 20, qrbox: { width: 250, height: 250 } },
+                    (decodedText) => {
+                        if (processReverseAckPayload(decodedText)) {
+                            document.getElementById('ack-status').innerText = `✅ ¡Bitmap Plano Sincronizado! Retransmitiendo ${sys.activeIndices.length} bloques faltantes.`;
+                            closeAckScanner();
+                            if (!sys.running) togglePlay();
+                        }
+                    },
+                    () => { }
+                );
+            } catch (err) {
+                document.getElementById('ack-status').innerText = "⚠️ No se pudo acceder a la webcam: " + err;
+            }
+        }
+
+        async function closeAckScanner() {
+            document.getElementById('ack-modal').classList.remove('open');
+            if (sys.ackScanner && sys.ackScanner.isScanning) {
+                try { await sys.ackScanner.stop(); } catch (e) { }
+            }
+        }
+
+        // =========================================================================
+        // 8. MODO ZEN Y OCULTAMIENTO AUTOMÁTICO POR INACTIVIDAD (3 SEGUNDOS)
+        // =========================================================================
+        function resetZenIdleTimer() {
+            if (!document.body.classList.contains('zen-mode')) return;
+            document.body.classList.remove('zen-idle');
+            clearTimeout(sys.zenIdleTimer);
+            sys.zenIdleTimer = setTimeout(() => {
+                if (document.body.classList.contains('zen-mode')) {
+                    document.body.classList.add('zen-idle');
+                }
+            }, 3000);
+        }
+
+        ['mousemove', 'mousedown', 'touchstart', 'keydown'].forEach(evt => {
+            window.addEventListener(evt, resetZenIdleTimer, { passive: true });
+        });
+
+        function toggleZen() {
+            if (document.body.classList.contains('zen-mode')) exitZen();
+            else enterZen();
+        }
+
+        function enterZen() {
+            if (!sys.totalChunks) return;
+            const el = document.documentElement;
+            if (el.requestFullscreen) el.requestFullscreen().catch(() => { });
+            document.body.classList.add('zen-mode');
+            resetZenIdleTimer();
+        }
+
+        function exitZen() {
+            clearTimeout(sys.zenIdleTimer);
+            document.body.classList.remove('zen-idle');
+            if (document.exitFullscreen && document.fullscreenElement) {
+                document.exitFullscreen().catch(() => { });
+            }
+            document.body.classList.remove('zen-mode');
+        }
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                clearTimeout(sys.zenIdleTimer);
+                document.body.classList.remove('zen-idle');
+                document.body.classList.remove('zen-mode');
+            }
+        });
+
+        // =========================================================================
+        // 9. WAKE LOCK PERMANENTE EN EMISOR (EVITAR SUSPENSIÓN DE PANTALLA)
+        // =========================================================================
+        let senderWakeLock = null;
+        async function ensureSenderWakeLock() {
+            if ('wakeLock' in navigator) {
+                try {
+                    if (!senderWakeLock || senderWakeLock.released) {
+                        senderWakeLock = await navigator.wakeLock.request('screen');
+                        senderWakeLock.addEventListener('release', () => {
+                            if (document.visibilityState === 'visible') {
+                                setTimeout(ensureSenderWakeLock, 300);
+                            }
+                        });
+                    }
+                } catch (e) { }
+            }
+        }
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') ensureSenderWakeLock();
+        });
+        ['click', 'keydown', 'pointerdown'].forEach(evt => {
+            document.addEventListener(evt, () => {
+                if (!senderWakeLock || senderWakeLock.released) ensureSenderWakeLock();
+                if (sys.audioCtx && sys.audioCtx.state === 'suspended') {
+                    sys.audioCtx.resume().then(() => {
+                        const lbl = document.getElementById('fft-freq-lbl');
+                        if (lbl && sys.audioListening) lbl.innerText = "MIC ACTIVO";
+                    }).catch(() => { });
+                }
+            }, { passive: true });
+        });
+
+        window.addEventListener('resize', () => {
+            drawTimelineHeatmap();
+            draw2DGridSelector();
+        });
+        window.addEventListener('DOMContentLoaded', () => {
+            draw2DGridSelector();
+            drawStandbySpectrogram();
+            ensureSenderWakeLock();
+        });
+    </script>
+</body>
+
+</html>
